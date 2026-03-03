@@ -1,0 +1,112 @@
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+
+# Composer dependencies
+/vendor/
+composer.lock
+
+# Logs
+*.log
+/logs/
+error.log
+access.log
+
+# Cache files
+/cache/
+/tmp/
+*.cache
+
+# Upload directories
+/uploads/
+/files/
+/assets/uploads/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node.js (if you have any frontend build tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Database files
+*.db
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Configuration files with sensitive data
+config/database.php
+config/secrets.php
+
+# JWT keys
+*.key
+*.pem
+
+# Temporary files
+*.tmp
+*.temp
+
+# Build artifacts
+/build/
+/dist/
+
+# Documentation build
+/docs/_build/
+/Database/
+
+# Testing
+/coverage/
+.phpunit.result.cache
+
+# Mac specific
+.AppleDouble
+.LSOverride
+
+# Windows specific
+*.exe
+*.msi
+
+# Linux specific
+*.deb
+*.rpm
+
+# PHP specific
+*.php~
+.php_cs.cache
+
+# Sensitive files
+private_key.pem
+public_key.pem
+jwt_private.key
+jwt_public.key
+
+# API documentation
+/swagger-ui-dist/
+
+/documentations
+/tests
