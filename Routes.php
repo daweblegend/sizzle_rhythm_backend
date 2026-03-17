@@ -322,6 +322,68 @@ return [
     // =====================
     // ADMIN ROUTES
     // =====================
+
+    // -- Account Management --
+    [
+        'method' => 'POST',
+        'url' => '/v1/admin/accounts/create',
+        'handler' => 'createAccount',
+        'path' => '/src/controllers/AdminController.php',
+        'action' => 'createAccount'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/admin/accounts',
+        'handler' => 'listUsers',
+        'path' => '/src/controllers/AdminController.php',
+        'action' => 'listUsers'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/admin/accounts/user',
+        'handler' => 'getUser',
+        'path' => '/src/controllers/AdminController.php',
+        'action' => 'getUser'
+    ],
+    [
+        'method' => 'PUT',
+        'url' => '/v1/admin/accounts/update',
+        'handler' => 'updateAccount',
+        'path' => '/src/controllers/AdminController.php',
+        'action' => 'updateAccount'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/admin/accounts/reset-password',
+        'handler' => 'resetUserPassword',
+        'path' => '/src/controllers/AdminController.php',
+        'action' => 'resetUserPassword'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/admin/accounts/toggle-status',
+        'handler' => 'toggleAccountStatus',
+        'path' => '/src/controllers/AdminController.php',
+        'action' => 'toggleAccountStatus'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/admin/test-email',
+        'handler' => 'testEmail',
+        'path' => '/src/controllers/AdminController.php',
+        'action' => 'testEmail'
+    ],
+
+    // -- Public: Account setup (user sets own password via emailed link) --
+    [
+        'method' => 'POST',
+        'url' => '/v1/account/setup',
+        'handler' => 'completeAccountSetup',
+        'path' => '/src/controllers/AdminController.php',
+        'action' => 'completeAccountSetup'
+    ],
+
+    // -- Legacy admin routes --
     [
         'method' => 'GET',
         'url' => '/v1/admin/data-plans',
@@ -366,5 +428,407 @@ return [
         'handler' => 'queueTestEmail',
         'path' => '/src/controllers/EmailQueueController.php',
         'action' => 'queueTestEmail'
+    ],
+
+    // =====================
+    // VENDOR STORE ROUTES
+    // =====================
+
+    // -- Authenticated Vendor Routes --
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/profile/create',
+        'handler' => 'createVendorProfile',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'createVendorProfile'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/profile',
+        'handler' => 'getVendorProfile',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'getVendorProfile'
+    ],
+    [
+        'method' => 'PUT',
+        'url' => '/v1/vendor/profile/update',
+        'handler' => 'updateVendorProfile',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'updateVendorProfile'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/profile/logo',
+        'handler' => 'uploadVendorLogo',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'uploadVendorLogo'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/profile/banner',
+        'handler' => 'uploadVendorBanner',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'uploadVendorBanner'
+    ],
+    [
+        'method' => 'PUT',
+        'url' => '/v1/vendor/opening-hours',
+        'handler' => 'updateOpeningHours',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'updateOpeningHours'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/store/toggle',
+        'handler' => 'toggleStoreStatus',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'toggleStoreStatus'
+    ],
+    [
+        'method' => 'PUT',
+        'url' => '/v1/vendor/delivery-settings',
+        'handler' => 'updateDeliverySettings',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'updateDeliverySettings'
+    ],
+
+    // -- Vendor Payment Gateway Config --
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/payment/gateway/configure',
+        'handler' => 'configureVendorGateway',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'configureVendorGateway'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/payment/gateway/config',
+        'handler' => 'getVendorGatewayConfig',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'getVendorGatewayConfig'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/payment/gateway/test',
+        'handler' => 'testVendorGatewayConnection',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'testVendorGatewayConnection'
+    ],
+
+    // -- Public Vendor Routes --
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendors',
+        'handler' => 'listVendors',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'listVendors'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendors/profile',
+        'handler' => 'getVendorBySlug',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'getVendorBySlug'
+    ],
+
+    // =====================
+    // VENDOR CATEGORY ROUTES
+    // =====================
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/categories',
+        'handler' => 'createCategory',
+        'path' => '/src/controllers/CategoryController.php',
+        'action' => 'createCategory'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/categories',
+        'handler' => 'listCategories',
+        'path' => '/src/controllers/CategoryController.php',
+        'action' => 'listCategories'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/categories/single',
+        'handler' => 'getCategory',
+        'path' => '/src/controllers/CategoryController.php',
+        'action' => 'getCategory'
+    ],
+    [
+        'method' => 'PUT',
+        'url' => '/v1/vendor/categories',
+        'handler' => 'updateCategory',
+        'path' => '/src/controllers/CategoryController.php',
+        'action' => 'updateCategory'
+    ],
+    [
+        'method' => 'DELETE',
+        'url' => '/v1/vendor/categories',
+        'handler' => 'deleteCategory',
+        'path' => '/src/controllers/CategoryController.php',
+        'action' => 'deleteCategory'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/categories/image',
+        'handler' => 'uploadCategoryImage',
+        'path' => '/src/controllers/CategoryController.php',
+        'action' => 'uploadCategoryImage'
+    ],
+
+    // =====================
+    // VENDOR INVENTORY ROUTES
+    // =====================
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/inventory',
+        'handler' => 'addInventoryItem',
+        'path' => '/src/controllers/InventoryController.php',
+        'action' => 'addInventoryItem'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/inventory',
+        'handler' => 'listInventoryItems',
+        'path' => '/src/controllers/InventoryController.php',
+        'action' => 'listInventoryItems'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/inventory/single',
+        'handler' => 'getInventoryItem',
+        'path' => '/src/controllers/InventoryController.php',
+        'action' => 'getInventoryItem'
+    ],
+    [
+        'method' => 'PUT',
+        'url' => '/v1/vendor/inventory',
+        'handler' => 'updateInventoryItem',
+        'path' => '/src/controllers/InventoryController.php',
+        'action' => 'updateInventoryItem'
+    ],
+    [
+        'method' => 'DELETE',
+        'url' => '/v1/vendor/inventory',
+        'handler' => 'deleteInventoryItem',
+        'path' => '/src/controllers/InventoryController.php',
+        'action' => 'deleteInventoryItem'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/inventory/adjust',
+        'handler' => 'adjustStock',
+        'path' => '/src/controllers/InventoryController.php',
+        'action' => 'adjustStock'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/inventory/logs',
+        'handler' => 'getStockLogs',
+        'path' => '/src/controllers/InventoryController.php',
+        'action' => 'getStockLogs'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/inventory/image',
+        'handler' => 'uploadInventoryImage',
+        'path' => '/src/controllers/InventoryController.php',
+        'action' => 'uploadInventoryImage'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/inventory/summary',
+        'handler' => 'getInventorySummary',
+        'path' => '/src/controllers/InventoryController.php',
+        'action' => 'getInventorySummary'
+    ],
+
+    // =====================
+    // VENDOR MENU ROUTES
+    // =====================
+
+    // -- Authenticated (vendor manages own menu) --
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/menu',
+        'handler' => 'createMenuItem',
+        'path' => '/src/controllers/MenuController.php',
+        'action' => 'createMenuItem'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/menu',
+        'handler' => 'listMenuItems',
+        'path' => '/src/controllers/MenuController.php',
+        'action' => 'listMenuItems'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/menu/single',
+        'handler' => 'getMenuItem',
+        'path' => '/src/controllers/MenuController.php',
+        'action' => 'getMenuItem'
+    ],
+    [
+        'method' => 'PUT',
+        'url' => '/v1/vendor/menu',
+        'handler' => 'updateMenuItem',
+        'path' => '/src/controllers/MenuController.php',
+        'action' => 'updateMenuItem'
+    ],
+    [
+        'method' => 'DELETE',
+        'url' => '/v1/vendor/menu',
+        'handler' => 'deleteMenuItem',
+        'path' => '/src/controllers/MenuController.php',
+        'action' => 'deleteMenuItem'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/menu/toggle',
+        'handler' => 'toggleMenuItemAvailability',
+        'path' => '/src/controllers/MenuController.php',
+        'action' => 'toggleMenuItemAvailability'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/menu/image',
+        'handler' => 'uploadMenuItemImage',
+        'path' => '/src/controllers/MenuController.php',
+        'action' => 'uploadMenuItemImage'
+    ],
+
+    // -- Public (customers browse menu) --
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendors/menu',
+        'handler' => 'getVendorMenu',
+        'path' => '/src/controllers/MenuController.php',
+        'action' => 'getVendorMenu'
+    ],
+
+    //*****************************************************
+    // ********** POS PAYMENT METHODS (Admin) *************
+    // ****************************************************
+    [
+        'method' => 'POST',
+        'url' => '/v1/admin/pos/payment-methods',
+        'handler' => 'createPaymentMethod',
+        'path' => '/src/controllers/POSPaymentMethodController.php',
+        'action' => 'createPaymentMethod'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/admin/pos/payment-methods',
+        'handler' => 'listPaymentMethods',
+        'path' => '/src/controllers/POSPaymentMethodController.php',
+        'action' => 'listPaymentMethods'
+    ],
+    [
+        'method' => 'PUT',
+        'url' => '/v1/admin/pos/payment-methods',
+        'handler' => 'updatePaymentMethod',
+        'path' => '/src/controllers/POSPaymentMethodController.php',
+        'action' => 'updatePaymentMethod'
+    ],
+    [
+        'method' => 'DELETE',
+        'url' => '/v1/admin/pos/payment-methods',
+        'handler' => 'deletePaymentMethod',
+        'path' => '/src/controllers/POSPaymentMethodController.php',
+        'action' => 'deletePaymentMethod'
+    ],
+
+    //*****************************************************
+    // ******** POS VENDOR PAYMENT METHODS ****************
+    // ****************************************************
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/pos/payment-methods',
+        'handler' => 'getVendorPaymentMethods',
+        'path' => '/src/controllers/POSOrderController.php',
+        'action' => 'getVendorPaymentMethods'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/pos/payment-methods/toggle',
+        'handler' => 'toggleVendorPaymentMethod',
+        'path' => '/src/controllers/POSOrderController.php',
+        'action' => 'toggleVendorPaymentMethod'
+    ],
+
+    //*****************************************************
+    // **************** POS ORDERS ************************
+    // ****************************************************
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/pos/orders',
+        'handler' => 'createOrder',
+        'path' => '/src/controllers/POSOrderController.php',
+        'action' => 'createOrder'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/pos/orders',
+        'handler' => 'listOrders',
+        'path' => '/src/controllers/POSOrderController.php',
+        'action' => 'listOrders'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/pos/orders/single',
+        'handler' => 'getOrder',
+        'path' => '/src/controllers/POSOrderController.php',
+        'action' => 'getOrder'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/pos/orders/items',
+        'handler' => 'addOrderItems',
+        'path' => '/src/controllers/POSOrderController.php',
+        'action' => 'addOrderItems'
+    ],
+    [
+        'method' => 'DELETE',
+        'url' => '/v1/vendor/pos/orders/items',
+        'handler' => 'removeOrderItem',
+        'path' => '/src/controllers/POSOrderController.php',
+        'action' => 'removeOrderItem'
+    ],
+    [
+        'method' => 'PUT',
+        'url' => '/v1/vendor/pos/orders/status',
+        'handler' => 'updateOrderStatus',
+        'path' => '/src/controllers/POSOrderController.php',
+        'action' => 'updateOrderStatus'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/pos/orders/payment',
+        'handler' => 'processOrderPayment',
+        'path' => '/src/controllers/POSOrderController.php',
+        'action' => 'processOrderPayment'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/pos/orders/discount',
+        'handler' => 'applyOrderDiscount',
+        'path' => '/src/controllers/POSOrderController.php',
+        'action' => 'applyOrderDiscount'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/pos/orders/archive',
+        'handler' => 'toggleOrderArchive',
+        'path' => '/src/controllers/POSOrderController.php',
+        'action' => 'toggleOrderArchive'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/pos/summary',
+        'handler' => 'getDailySummary',
+        'path' => '/src/controllers/POSOrderController.php',
+        'action' => 'getDailySummary'
     ],
 ];

@@ -14,17 +14,56 @@ function getUserProfile() {
     $tokenData = UtilHandler::verifyJWTToken();
     if (!$tokenData) return;
     $userId = UtilHandler::sanitizeInput($conn, $tokenData['userId']);
-    $query = "SELECT id, uuid, name, email, phone, photo, balance, email_verified, phone_verified, is_active, created_at, updated_at FROM users WHERE id = '$userId'";
-    $result = mysqli_query($conn, $query);
+    $query = "SELECT id, uuid, first_name, last_name, username, email, phone, role, balance, avatar, email_verified, phone_verified, is_active, created_at, updated_at FROM users WHERE id = ?";
+    $stmt = mysqli_prepare($conn, $query);
+    mysqli_stmt_bind_param($stmt, "i", $userId);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
     $user = mysqli_fetch_assoc($result);
 
-    // formatted balance
-    $user['formatted_balance'] = number_format($user['balance'], 2);
-    
     if (!$user) {
         ResponseHandler::error('User not found', null, 404);
         return;
     }
+
+    // formatted balance
+    $user['formatted_balance'] = number_format($user['balance'], 2);
+
+    // If user is a vendor, append their store profile
+    if ($user['role'] === 'vendor') {
+        $vQuery = "SELECT * FROM vendors WHERE user_id = ? LIMIT 1";
+        $vStmt = mysqli_prepare($conn, $vQuery);
+        mysqli_stmt_bind_param($vStmt, "i", $userId);
+        mysqli_stmt_execute($vStmt);
+        $vResult = mysqli_stmt_get_result($vStmt);
+        $vendor = mysqli_fetch_assoc($vResult);
+
+        if ($vendor) {
+            // Decode JSON fields
+            foreach (['cuisine_type', 'tags', 'opening_hours'] as $field) {
+                if (isset($vendor[$field]) && is_string($vendor[$field])) {
+                    $vendor[$field] = json_decode($vendor[$field], true);
+                }
+            }
+            // Cast numeric / boolean fields
+            $vendor['minimum_order']      = (float)($vendor['minimum_order'] ?? 0);
+            $vendor['delivery_fee']       = (float)($vendor['delivery_fee'] ?? 0);
+            $vendor['delivery_radius_km'] = $vendor['delivery_radius_km'] !== null ? (float)$vendor['delivery_radius_km'] : null;
+            $vendor['average_rating']     = (float)$vendor['average_rating'];
+            $vendor['total_orders']       = (int)$vendor['total_orders'];
+            $vendor['total_reviews']      = (int)$vendor['total_reviews'];
+            $vendor['is_open']            = (bool)$vendor['is_open'];
+            $vendor['delivery_available'] = (bool)$vendor['delivery_available'];
+            $vendor['pickup_available']   = (bool)$vendor['pickup_available'];
+            $vendor['is_verified']        = (bool)$vendor['is_verified'];
+            $vendor['is_active']          = (bool)$vendor['is_active'];
+
+            $user['vendor_profile'] = $vendor;
+        } else {
+            $user['vendor_profile'] = null;
+        }
+    }
+
     ResponseHandler::success('Profile retrieved successfully', $user);
 }
 
@@ -35,7 +74,8 @@ function updateUserProfile() {
     $userId = UtilHandler::sanitizeInput($conn, $tokenData['userId']);
     $requestBody = json_decode(file_get_contents('php://input'), true);
     $fields = [];
-    if (!empty($requestBody['name'])) $fields[] = "name='" . mysqli_real_escape_string($conn, $requestBody['name']) . "'";
+    if (!empty($requestBody['first_name'])) $fields[] = "first_name='" . mysqli_real_escape_string($conn, $requestBody['first_name']) . "'";
+    if (!empty($requestBody['last_name'])) $fields[] = "last_name='" . mysqli_real_escape_string($conn, $requestBody['last_name']) . "'";
     if (!empty($requestBody['phone'])) $fields[] = "phone='" . mysqli_real_escape_string($conn, $requestBody['phone']) . "'";
     if (empty($fields)) {
         ResponseHandler::error('No fields to update');

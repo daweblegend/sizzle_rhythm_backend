@@ -77,7 +77,7 @@ class MailHandler {
                     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" class="email-container" style="margin: 0 auto;">
                         <tr>
                             <td style="text-align: center;">
-                                <a href="https://waves.ng" style="text-decoration: none;">
+                                <a href="#" style="text-decoration: none;">
                                     <!-- Dark logo for light mode -->
                                     <img src="https://ik.imagekit.io/kairong/default/logo.png" alt="{{company}}" width="150" height="auto" border="0" class="dark-logo" style="display: inline-block; max-width: 150px; height: auto; outline: none; text-decoration: none; border: 0;">
                                     <!-- Light logo for dark mode -->
@@ -173,15 +173,18 @@ class MailHandler {
      */
     public static function getSmtpConfig() {
         $config = [
-            'host' => $_ENV['MAIL_HOST'] ?? '',
-            'port' => (int)($_ENV['MAIL_PORT'] ?? 465),
-            'user' => $_ENV['MAIL_USER'] ?? '',
-            'pass' => $_ENV['MAIL_PASS'] ?? '',
-            'company' => $_ENV['SITE_NAME'] ?? 'Waves',
+            // Support both SMTP_* (primary) and MAIL_* (fallback) env key naming
+            'host'       => $_ENV['SMTP_HOST']       ?? $_ENV['MAIL_HOST'] ?? '',
+            'port'       => (int)($_ENV['SMTP_PORT']  ?? $_ENV['MAIL_PORT'] ?? 587),
+            'user'       => $_ENV['SMTP_USERNAME']    ?? $_ENV['MAIL_USER'] ?? '',
+            'pass'       => $_ENV['SMTP_PASSWORD']    ?? $_ENV['MAIL_PASS'] ?? '',
+            'from_email' => $_ENV['SMTP_FROM_EMAIL']  ?? $_ENV['SMTP_USERNAME'] ?? $_ENV['MAIL_USER'] ?? '',
+            'from_name'  => $_ENV['SMTP_FROM_NAME']   ?? $_ENV['SITE_NAME'] ?? 'Sizzle & Rhythm',
+            'company'    => $_ENV['SITE_NAME']        ?? 'Sizzle & Rhythm',
         ];
         // Validate required config
         if (empty($config['host']) || empty($config['user']) || empty($config['pass'])) {
-            throw new Exception('SMTP configuration is incomplete');
+            throw new Exception('SMTP configuration is incomplete. Check SMTP_HOST, SMTP_USERNAME and SMTP_PASSWORD in .env');
         }
         return $config;
     }
@@ -201,28 +204,46 @@ class MailHandler {
     }
     
     /**
-     * Function to send a transactional email (now queues the email for async processing)
+     * Function to send a transactional email.
+     * 
+     * Delivery mode is controlled by the MAIL_DELIVERY_MODE env variable:
+     *   - "direct" (default) → sends immediately via SMTP
+     *   - "queue"            → queues the email for async processing
      * 
      * @param string $email Recipient email
      * @param string $subject Email subject
      * @param string $body Email body (HTML)
      * @param bool $includeHero Whether to include hero image (default: false)
      * @param int $priority Email priority (1=highest, 10=lowest, default: 5)
-     * @return array Result with success status and queue information
+     * @return array Result with success status
      */
     public static function sendTransactionalEmail($email, $subject, $body, $includeHero = false, $priority = 5) {
-        // Load the EmailQueueHandler
-        require_once __DIR__ . '/EmailQueueHandler.php';
-        
-        // Queue the email for asynchronous processing
-        $result = EmailQueueHandler::queueEmail($email, $subject, $body, $includeHero, $priority);
-        
-        if ($result['success']) {
-            error_log("📧 Email queued for async processing - To: $email, Subject: $subject, Queue ID: " . $result['queue_id']);
-        } else {
-            error_log("❌ Failed to queue email - To: $email, Subject: $subject, Error: " . ($result['error'] ?? 'Unknown error'));
+        $mode = strtolower(trim($_ENV['MAIL_DELIVERY_MODE'] ?? 'direct'));
+
+        if ($mode === 'queue') {
+            // Queue the email for asynchronous processing
+            require_once __DIR__ . '/EmailQueueHandler.php';
+            
+            $result = EmailQueueHandler::queueEmail($email, $subject, $body, $includeHero, $priority);
+            
+            if ($result['success']) {
+                error_log("📧 Email queued for async processing - To: $email, Subject: $subject, Queue ID: " . $result['queue_id']);
+            } else {
+                error_log("❌ Failed to queue email - To: $email, Subject: $subject, Error: " . ($result['error'] ?? 'Unknown error'));
+            }
+            
+            return $result;
         }
-        
+
+        // Default: send immediately
+        $result = self::sendTransactionalEmailNow($email, $subject, $body, $includeHero);
+
+        if ($result['success']) {
+            error_log("📧 Email sent directly - To: $email, Subject: $subject");
+        } else {
+            error_log("❌ Failed to send email directly - To: $email, Subject: $subject, Error: " . ($result['error'] ?? 'Unknown error'));
+        }
+
         return $result;
     }
 
@@ -254,8 +275,8 @@ class MailHandler {
             $mail->CharSet = PHPMailer::CHARSET_UTF8;
             $mail->Encoding = 'base64';
             
-            // Recipients
-            $mail->setFrom($config['user'], $config['company']);
+            // Recipients - use dedicated from email/name instead of SMTP username
+            $mail->setFrom($config['from_email'], $config['from_name']);
             $mail->addAddress($email);
             
             // Content
@@ -340,14 +361,14 @@ class MailHandler {
         // Extract first name from full name
         $firstName = explode(' ', trim($name))[0];
         
-        $subject = 'Welcome to Waves!';
+        $subject = 'Welcome to Sizzle & Rhythms!';
         $body = '
             <h1 style="margin: 0 0 24px 0; color: #181411; font-size: 28px; font-weight: bold; line-height: 1.3;">
                 Hi ' . htmlspecialchars($firstName) . '!
             </h1>
             
             <p style="margin: 0 0 16px 0; color: #181411; font-size: 16px; line-height: 1.6;">
-                Welcome to Waves! We\'re thrilled to have you join our community of gift-givers and celebration enthusiasts.
+                Welcome to Sizzle & Rhythms! We\'re thrilled to have you join our community of gift-givers and celebration enthusiasts.
             </p>
             
             <p style="margin: 0 0 24px 0; color: #8a7560; font-size: 16px; line-height: 1.6;">

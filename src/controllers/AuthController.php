@@ -313,15 +313,14 @@ function login() {
     }
     
     if (!$userid) {
-        ResponseHandler::error('Email or phone is required');
+        ResponseHandler::error('Email, phone or username is required');
         return;
     }
     
     $password = $requestBody['password'];
     
-    // Build query to find user by email or phone
-    // The userid can be either email or phone, so we check both columns
-    $query = "SELECT * FROM users WHERE email = '$userid' OR phone = '$userid'";
+    // Build query to find user by email, phone, or username
+    $query = "SELECT * FROM users WHERE email = '$userid' OR phone = '$userid' OR username = '$userid'";
     $result = mysqli_query($conn, $query);
     
     if ($result && mysqli_num_rows($result) > 0) {
@@ -355,11 +354,13 @@ function login() {
                 'user' => [
                     'id' => $userId,
                     'uuid' => $user['uuid'],
+                    'username' => $user['username'],
                     'first_name' => $user['first_name'],
                     'last_name' => $user['last_name'],
                     'name' => $user['first_name'] . ' ' . $user['last_name'],
                     'email' => $user['email'],
                     'phone' => $user['phone'],
+                    'role' => $user['role'],
                     'email_verified' => (bool)$user['email_verified'],
                     'phone_verified' => (bool)$user['phone_verified'],
                     'is_active' => (bool)$user['is_active'],

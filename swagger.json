@@ -529,7 +529,7 @@
     "/v1/auth/login": {
       "post": {
         "summary": "Login user",
-        "description": "Authenticate user with email or phone and password. Returns JWT token.",
+        "description": "Authenticate user with email, phone, or username and password. Returns JWT token.",
         "tags": ["Authentication"],
         "security": [],
         "requestBody": {
@@ -539,16 +539,21 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "userid": {
+                    "type": "string",
+                    "example": "john@example.com",
+                    "description": "Email, phone number, or username"
+                  },
                   "email": {
                     "type": "string",
                     "format": "email",
                     "example": "john@example.com",
-                    "description": "Email (use email OR phone)"
+                    "description": "Email (legacy field — prefer 'userid')"
                   },
                   "phone": {
                     "type": "string",
                     "example": "+1234567890",
-                    "description": "Phone (use email OR phone)"
+                    "description": "Phone (legacy field — prefer 'userid')"
                   },
                   "password": {
                     "type": "string",
@@ -558,6 +563,13 @@
                 "required": ["password"]
               },
               "examples": {
+                "useridLogin": {
+                  "summary": "Login with userid (email, phone, or username)",
+                  "value": {
+                    "userid": "john_doe",
+                    "password": "password123"
+                  }
+                },
                 "emailLogin": {
                   "summary": "Login with email",
                   "value": {
@@ -1796,6 +1808,1792 @@
           }
         }
       }
+    },
+    "/v1/admin/accounts/create": {
+      "post": {
+        "summary": "Create user account",
+        "description": "Admin creates a new user, vendor, or admin account. If password is provided, the admin sets it and the user receives credentials via email. If password is omitted, the user receives an onboarding email with a link to set their own password.",
+        "tags": ["Admin - Accounts"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["first_name", "last_name", "email", "username"],
+                "properties": {
+                  "first_name": { "type": "string", "example": "Jane" },
+                  "last_name": { "type": "string", "example": "Doe" },
+                  "email": { "type": "string", "format": "email", "example": "jane@example.com" },
+                  "username": { "type": "string", "description": "Unique username (3-30 chars, letters, numbers and underscores only)", "example": "jane_doe", "pattern": "^[a-zA-Z0-9_]{3,30}$" },
+                  "phone": { "type": "string", "example": "08012345678" },
+                  "role": { "type": "string", "enum": ["customer", "vendor", "admin"], "default": "customer" },
+                  "password": { "type": "string", "description": "If omitted, user will set their own password via email link", "example": "SecurePass123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Account created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "integer", "example": 201 },
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Account created successfully." },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "integer", "example": 5 },
+                        "uuid": { "type": "string" },
+                        "first_name": { "type": "string" },
+                        "last_name": { "type": "string" },
+                        "username": { "type": "string" },
+                        "email": { "type": "string" },
+                        "phone": { "type": "string", "nullable": true },
+                        "role": { "type": "string" },
+                        "is_active": { "type": "integer", "example": 1 },
+                        "password_set_by": { "type": "string", "enum": ["admin", "pending_user_setup"] },
+                        "created_at": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error" },
+          "403": { "description": "Access denied — admin only" }
+        }
+      }
+    },
+    "/v1/admin/accounts": {
+      "get": {
+        "summary": "List all users",
+        "description": "Paginated list of all users with optional filters by role, status and search term.",
+        "tags": ["Admin - Accounts"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } },
+          { "name": "role", "in": "query", "schema": { "type": "string", "enum": ["customer", "vendor", "admin"] } },
+          { "name": "is_active", "in": "query", "schema": { "type": "integer", "enum": [0, 1] } },
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Search by name, email or phone" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Users retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "integer", "example": 200 },
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "users": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "integer" },
+                              "uuid": { "type": "string" },
+                              "first_name": { "type": "string" },
+                              "last_name": { "type": "string" },
+                              "email": { "type": "string" },
+                              "phone": { "type": "string", "nullable": true },
+                              "role": { "type": "string" },
+                              "avatar": { "type": "string", "nullable": true },
+                              "is_active": { "type": "integer" },
+                              "created_at": { "type": "string", "format": "date-time" }
+                            }
+                          }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": { "type": "integer" },
+                            "limit": { "type": "integer" },
+                            "total": { "type": "integer" },
+                            "total_pages": { "type": "integer" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": { "description": "Access denied — admin only" }
+        }
+      }
+    },
+    "/v1/admin/accounts/user": {
+      "get": {
+        "summary": "Get single user",
+        "description": "Retrieve detailed information about a specific user by ID.",
+        "tags": ["Admin - Accounts"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "user_id", "in": "query", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "User retrieved successfully" },
+          "404": { "description": "User not found" },
+          "403": { "description": "Access denied — admin only" }
+        }
+      }
+    },
+    "/v1/admin/accounts/update": {
+      "put": {
+        "summary": "Update user account",
+        "description": "Admin updates a user's profile fields (first_name, last_name, phone, role, is_active).",
+        "tags": ["Admin - Accounts"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["user_id"],
+                "properties": {
+                  "user_id": { "type": "integer", "example": 5 },
+                  "first_name": { "type": "string" },
+                  "last_name": { "type": "string" },
+                  "phone": { "type": "string" },
+                  "role": { "type": "string", "enum": ["customer", "vendor", "admin"] },
+                  "is_active": { "type": "integer", "enum": [0, 1] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Account updated successfully" },
+          "400": { "description": "Validation error" },
+          "404": { "description": "User not found" },
+          "403": { "description": "Access denied — admin only" }
+        }
+      }
+    },
+    "/v1/admin/accounts/reset-password": {
+      "post": {
+        "summary": "Reset user password",
+        "description": "Admin resets a user's password. If password is provided, that value is used. Otherwise a secure random password is generated. The user is notified via email in both cases.",
+        "tags": ["Admin - Accounts"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["user_id"],
+                "properties": {
+                  "user_id": { "type": "integer", "example": 5 },
+                  "password": { "type": "string", "description": "Optional. If omitted a random password is generated." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Password reset successfully" },
+          "404": { "description": "User not found" },
+          "403": { "description": "Access denied — admin only" }
+        }
+      }
+    },
+    "/v1/admin/accounts/toggle-status": {
+      "post": {
+        "summary": "Activate / deactivate account",
+        "description": "Toggles a user's is_active flag. Admins cannot deactivate their own account. If the account is re-activated, the user receives a notification email.",
+        "tags": ["Admin - Accounts"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["user_id"],
+                "properties": {
+                  "user_id": { "type": "integer", "example": 5 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account status toggled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "integer", "example": 200 },
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Account activated successfully." },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "user_id": { "type": "integer" },
+                        "is_active": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Cannot deactivate own account" },
+          "404": { "description": "User not found" },
+          "403": { "description": "Access denied — admin only" }
+        }
+      }
+    },
+    "/v1/admin/test-email": {
+      "post": {
+        "summary": "Send a test email",
+        "description": "Sends a test email to verify that the SMTP configuration is working. The email is sent immediately (not queued).",
+        "tags": ["Admin - Accounts"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["to_email"],
+                "properties": {
+                  "to_email": { "type": "string", "format": "email", "example": "test@example.com", "description": "Recipient email address" },
+                  "subject": { "type": "string", "example": "Test Email", "description": "Optional custom subject line" },
+                  "message": { "type": "string", "example": "This is a test email.", "description": "Optional custom message body" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Test email sent successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "integer", "example": 200 },
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Test email sent successfully to test@example.com" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid or missing to_email" },
+          "403": { "description": "Access denied — admin only" },
+          "500": { "description": "Failed to send test email" }
+        }
+      }
+    },
+    "/v1/account/setup": {
+      "post": {
+        "summary": "Complete account setup",
+        "description": "Public endpoint used by new users who received an onboarding email to set their own password. Requires the one-time token and user UUID from the email link.",
+        "tags": ["Admin - Accounts"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["token", "uid", "password"],
+                "properties": {
+                  "token": { "type": "string", "description": "One-time setup token from the email link" },
+                  "uid": { "type": "string", "description": "User UUID from the email link" },
+                  "password": { "type": "string", "description": "The password the user wants to set", "example": "MySecurePass123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Password set successfully. User can now log in." },
+          "400": { "description": "Invalid/used setup link or weak password" },
+          "404": { "description": "Invalid setup link" }
+        }
+      }
+    },
+    "/v1/vendor/profile/create": {
+      "post": {
+        "tags": ["Vendor Store"],
+        "summary": "Create store profile",
+        "description": "Set up the food vendor store profile. Called once when a vendor first registers. Supports JSON body or multipart/form-data (when uploading logo/banner). For multipart, send cuisine_type, tags, and opening_hours as JSON strings. Requires vendor role.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["business_name"],
+                "properties": {
+                  "business_name": { "type": "string", "example": "Mama's Kitchen" },
+                  "description": { "type": "string", "example": "Authentic Nigerian home-cooked meals made fresh daily" },
+                  "contact_email": { "type": "string", "format": "email" },
+                  "contact_phone": { "type": "string", "example": "08012345678" },
+                  "address": { "type": "string", "example": "12 Marina Road, Victoria Island" },
+                  "city": { "type": "string", "example": "Lagos" },
+                  "state": { "type": "string", "example": "Lagos" },
+                  "country": { "type": "string", "default": "Nigeria" },
+                  "cuisine_type": { "type": "array", "items": { "type": "string" }, "example": ["Nigerian", "Continental", "Fast Food"] },
+                  "tags": { "type": "array", "items": { "type": "string" }, "example": ["spicy", "grills", "halal", "vegan-options"] },
+                  "preparation_time": { "type": "string", "example": "15-30 mins" },
+                  "minimum_order": { "type": "number", "example": 1500, "default": 0 },
+                  "delivery_available": { "type": "boolean", "default": true },
+                  "pickup_available": { "type": "boolean", "default": true },
+                  "delivery_fee": { "type": "number", "example": 500, "default": 0 },
+                  "delivery_radius_km": { "type": "number", "example": 10 },
+                  "estimated_delivery_time": { "type": "string", "example": "30-45 mins" },
+                  "opening_hours": {
+                    "type": "object",
+                    "example": { "mon": { "open": "08:00", "close": "22:00" }, "tue": { "open": "08:00", "close": "22:00" }, "sun": { "open": "10:00", "close": "18:00" } }
+                  }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["business_name"],
+                "properties": {
+                  "business_name": { "type": "string", "example": "Mama's Kitchen" },
+                  "description": { "type": "string", "example": "Authentic Nigerian home-cooked meals made fresh daily" },
+                  "contact_email": { "type": "string", "format": "email" },
+                  "contact_phone": { "type": "string", "example": "08012345678" },
+                  "address": { "type": "string", "example": "12 Marina Road, Victoria Island" },
+                  "city": { "type": "string", "example": "Lagos" },
+                  "state": { "type": "string", "example": "Lagos" },
+                  "country": { "type": "string", "default": "Nigeria" },
+                  "cuisine_type": { "type": "string", "description": "JSON string array, e.g. [\"Nigerian\",\"Continental\"]" },
+                  "tags": { "type": "string", "description": "JSON string array, e.g. [\"spicy\",\"grills\"]" },
+                  "preparation_time": { "type": "string", "example": "15-30 mins" },
+                  "minimum_order": { "type": "number", "example": 1500, "default": 0 },
+                  "delivery_available": { "type": "boolean", "default": true },
+                  "pickup_available": { "type": "boolean", "default": true },
+                  "delivery_fee": { "type": "number", "example": 500, "default": 0 },
+                  "delivery_radius_km": { "type": "number", "example": 10 },
+                  "estimated_delivery_time": { "type": "string", "example": "30-45 mins" },
+                  "opening_hours": { "type": "string", "description": "JSON string object, e.g. {\"mon\":{\"open\":\"08:00\",\"close\":\"22:00\"}}" },
+                  "logo": { "type": "string", "format": "binary", "description": "Store logo (png/jpeg/webp, max 2 MB)" },
+                  "banner": { "type": "string", "format": "binary", "description": "Store banner (png/jpeg/webp, max 5 MB)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Store profile created successfully" },
+          "400": { "description": "Validation error or profile already exists" },
+          "403": { "description": "Not a vendor role" },
+          "500": { "description": "Server error" }
+        }
+      }
+    },
+    "/v1/vendor/profile": {
+      "get": {
+        "tags": ["Vendor Store"],
+        "summary": "Get own store profile",
+        "description": "Retrieve the authenticated vendor's full store profile including user info.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Vendor profile retrieved successfully" },
+          "403": { "description": "Not a vendor role" },
+          "404": { "description": "Store profile not found" }
+        }
+      }
+    },
+    "/v1/vendor/profile/update": {
+      "put": {
+        "tags": ["Vendor Store"],
+        "summary": "Update store profile",
+        "description": "Update any store profile fields. All fields optional — only provided fields are updated. Changing business_name auto-regenerates the slug.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "business_name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "contact_email": { "type": "string" },
+                  "contact_phone": { "type": "string" },
+                  "address": { "type": "string" },
+                  "city": { "type": "string" },
+                  "state": { "type": "string" },
+                  "country": { "type": "string" },
+                  "cuisine_type": { "type": "array", "items": { "type": "string" } },
+                  "tags": { "type": "array", "items": { "type": "string" } },
+                  "preparation_time": { "type": "string" },
+                  "minimum_order": { "type": "number" },
+                  "delivery_available": { "type": "boolean" },
+                  "pickup_available": { "type": "boolean" },
+                  "delivery_fee": { "type": "number" },
+                  "delivery_radius_km": { "type": "number" },
+                  "estimated_delivery_time": { "type": "string" },
+                  "is_open": { "type": "boolean" },
+                  "opening_hours": { "type": "object" },
+                  "latitude": { "type": "number" },
+                  "longitude": { "type": "number" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Store profile updated successfully" },
+          "400": { "description": "No valid fields to update" },
+          "403": { "description": "Not a vendor role" },
+          "404": { "description": "Store profile not found" }
+        }
+      }
+    },
+    "/v1/vendor/profile/logo": {
+      "post": {
+        "tags": ["Vendor Store"],
+        "summary": "Upload store logo",
+        "description": "Upload or replace the store's logo image. Max 2MB. Accepts PNG, JPEG, WebP.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["logo"],
+                "properties": {
+                  "logo": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Logo uploaded successfully" },
+          "400": { "description": "No file provided or invalid file type/size" },
+          "403": { "description": "Not a vendor role" },
+          "404": { "description": "Store profile not found" }
+        }
+      }
+    },
+    "/v1/vendor/profile/banner": {
+      "post": {
+        "tags": ["Vendor Store"],
+        "summary": "Upload store banner",
+        "description": "Upload or replace the store's banner/cover image. Max 5MB. Accepts PNG, JPEG, WebP.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["banner"],
+                "properties": {
+                  "banner": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Banner uploaded successfully" },
+          "400": { "description": "No file provided or invalid file type/size" },
+          "403": { "description": "Not a vendor role" },
+          "404": { "description": "Store profile not found" }
+        }
+      }
+    },
+    "/v1/vendor/opening-hours": {
+      "put": {
+        "tags": ["Vendor Store"],
+        "summary": "Update opening hours",
+        "description": "Set the store's weekly opening hours. Each day requires an 'open' and 'close' time.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["opening_hours"],
+                "properties": {
+                  "opening_hours": {
+                    "type": "object",
+                    "description": "Day keys (mon-sun) with open/close times",
+                    "example": {
+                      "mon": { "open": "08:00", "close": "22:00" },
+                      "tue": { "open": "08:00", "close": "22:00" },
+                      "wed": { "open": "08:00", "close": "22:00" },
+                      "sat": { "open": "10:00", "close": "23:00" },
+                      "sun": { "open": "12:00", "close": "20:00" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Opening hours updated successfully" },
+          "400": { "description": "Invalid format — each day needs open/close times" },
+          "403": { "description": "Not a vendor role" },
+          "404": { "description": "Store profile not found" }
+        }
+      }
+    },
+    "/v1/vendor/store/toggle": {
+      "post": {
+        "tags": ["Vendor Store"],
+        "summary": "Toggle store open/closed",
+        "description": "Quick toggle the store between open and closed. No request body needed.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Store status toggled. Returns new is_open boolean." },
+          "403": { "description": "Not a vendor role" },
+          "404": { "description": "Store profile not found" }
+        }
+      }
+    },
+    "/v1/vendor/delivery-settings": {
+      "put": {
+        "tags": ["Vendor Store"],
+        "summary": "Update delivery settings",
+        "description": "Update delivery-related settings: fees, radius, availability, minimum order, etc.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "delivery_available": { "type": "boolean", "example": true },
+                  "pickup_available": { "type": "boolean", "example": true },
+                  "delivery_fee": { "type": "number", "example": 500 },
+                  "delivery_radius_km": { "type": "number", "example": 10 },
+                  "estimated_delivery_time": { "type": "string", "example": "30-45 mins" },
+                  "minimum_order": { "type": "number", "example": 2000 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Delivery settings updated" },
+          "400": { "description": "No valid fields to update" },
+          "403": { "description": "Not a vendor role" },
+          "404": { "description": "Store profile not found" }
+        }
+      }
+    },
+    "/v1/vendor/payment/gateway/configure": {
+      "post": {
+        "tags": ["Vendor Payment Config"],
+        "summary": "Configure payment gateway",
+        "description": "Save payment gateway credentials and settings for the authenticated vendor. The vendor's user_id is automatically applied from the JWT token.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["gateway", "credentials", "environment"],
+                "properties": {
+                  "gateway": {
+                    "type": "string",
+                    "description": "Gateway to configure",
+                    "enum": ["nomba", "paystack", "flutterwave", "monnify"],
+                    "example": "paystack"
+                  },
+                  "environment": {
+                    "type": "string",
+                    "enum": ["sandbox", "live"],
+                    "example": "sandbox"
+                  },
+                  "credentials": {
+                    "type": "object",
+                    "description": "Gateway-specific credentials. Keys vary per gateway.",
+                    "example": {
+                      "public_key": "pk_test_xxxxx",
+                      "secret_key": "sk_test_xxxxx",
+                      "webhook_secret": ""
+                    }
+                  },
+                  "settings": {
+                    "type": "object",
+                    "description": "Optional fee/processing settings",
+                    "example": { "fee_percentage": 1.5, "capped_at": 2000 }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Gateway configured successfully" },
+          "400": { "description": "Missing required fields" },
+          "403": { "description": "Not a vendor role" },
+          "500": { "description": "Failed to save configuration" }
+        }
+      }
+    },
+    "/v1/vendor/payment/gateway/config": {
+      "get": {
+        "tags": ["Vendor Payment Config"],
+        "summary": "Get gateway configuration",
+        "description": "Retrieve the vendor's stored gateway configuration. Credential values are hidden — only the credential key names are returned.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "gateway", "in": "query", "required": true, "schema": { "type": "string", "enum": ["nomba", "paystack", "flutterwave", "monnify"] }, "description": "Gateway slug" },
+          { "name": "environment", "in": "query", "schema": { "type": "string", "enum": ["sandbox", "live"], "default": "sandbox" } }
+        ],
+        "responses": {
+          "200": { "description": "Gateway configuration retrieved (credentials hidden)" },
+          "400": { "description": "Missing gateway parameter" },
+          "403": { "description": "Not a vendor role" },
+          "404": { "description": "Configuration not found" }
+        }
+      }
+    },
+    "/v1/vendor/payment/gateway/test": {
+      "post": {
+        "tags": ["Vendor Payment Config"],
+        "summary": "Test gateway connection",
+        "description": "Test a gateway connection with the provided credentials without saving. Useful for validating credentials before committing.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["gateway", "credentials", "environment"],
+                "properties": {
+                  "gateway": {
+                    "type": "string",
+                    "enum": ["nomba", "paystack", "flutterwave", "monnify"],
+                    "example": "nomba"
+                  },
+                  "environment": {
+                    "type": "string",
+                    "enum": ["sandbox", "live"],
+                    "example": "sandbox"
+                  },
+                  "credentials": {
+                    "type": "object",
+                    "description": "Gateway-specific credentials to test",
+                    "example": {
+                      "client_id": "xxx",
+                      "client_secret": "xxx",
+                      "account_id": "xxx"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Gateway connection test successful — returns supported methods and currencies" },
+          "400": { "description": "Connection test failed or missing fields" },
+          "403": { "description": "Not a vendor role" },
+          "404": { "description": "Gateway implementation not found" }
+        }
+      }
+    },
+    "/v1/vendors": {
+      "get": {
+        "tags": ["Vendors - Public"],
+        "summary": "List / search food vendors",
+        "description": "Public endpoint to browse and search active food vendors. Filter by cuisine, city, open status, delivery availability. Paginated.",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 50 } },
+          { "name": "cuisine", "in": "query", "schema": { "type": "string" }, "description": "Filter by cuisine type (e.g. Nigerian, Chinese)" },
+          { "name": "city", "in": "query", "schema": { "type": "string" }, "description": "Filter by city (partial match)" },
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Search store name, description, or vendor name" },
+          { "name": "open_now", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Only show stores currently open" },
+          { "name": "delivery", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Only show stores that deliver" },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["rating", "newest", "delivery_fee"], "default": "rating" } }
+        ],
+        "responses": {
+          "200": { "description": "Vendors list with pagination" }
+        }
+      }
+    },
+    "/v1/vendors/profile": {
+      "get": {
+        "tags": ["Vendors - Public"],
+        "summary": "Get vendor store by slug",
+        "description": "Public endpoint to view a food vendor's full store profile by their unique slug.",
+        "parameters": [
+          { "name": "slug", "in": "query", "required": true, "schema": { "type": "string" }, "description": "The vendor's unique URL slug (e.g. mamas-kitchen)" }
+        ],
+        "responses": {
+          "200": { "description": "Vendor store profile retrieved" },
+          "400": { "description": "Missing slug parameter" },
+          "404": { "description": "Vendor not found" }
+        }
+      }
+    },
+    "/v1/vendor/categories": {
+      "post": {
+        "tags": ["Vendor Categories"],
+        "summary": "Create category",
+        "description": "Create a new category. Supports JSON body or multipart/form-data (when uploading an image). Categories are shared between inventory and menu via the 'type' field.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Beverages" },
+                  "description": { "type": "string", "example": "Drinks and refreshments" },
+                  "type": { "type": "string", "enum": ["inventory", "menu", "both"], "default": "both", "description": "Where this category is usable" },
+                  "sort_order": { "type": "integer", "default": 0 }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Beverages" },
+                  "description": { "type": "string", "example": "Drinks and refreshments" },
+                  "type": { "type": "string", "enum": ["inventory", "menu", "both"], "default": "both" },
+                  "sort_order": { "type": "integer", "default": 0 },
+                  "image": { "type": "string", "format": "binary", "description": "Category image (png/jpeg/webp, max 2 MB)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Category created" },
+          "400": { "description": "Name is required" },
+          "403": { "description": "Not a vendor" }
+        }
+      },
+      "get": {
+        "tags": ["Vendor Categories"],
+        "summary": "List categories",
+        "description": "List all active categories for the vendor. Optionally filter by type.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["inventory", "menu", "both"] }, "description": "Filter by type. 'inventory' returns inventory+both, 'menu' returns menu+both." }
+        ],
+        "responses": {
+          "200": { "description": "Categories list" },
+          "403": { "description": "Not a vendor" }
+        }
+      },
+      "put": {
+        "tags": ["Vendor Categories"],
+        "summary": "Update category",
+        "description": "Update a category's name, description, type, sort_order, or is_active.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["category_id"],
+                "properties": {
+                  "category_id": { "type": "integer" },
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "type": { "type": "string", "enum": ["inventory", "menu", "both"] },
+                  "sort_order": { "type": "integer" },
+                  "is_active": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Category updated" },
+          "400": { "description": "No valid fields" },
+          "404": { "description": "Category not found" }
+        }
+      },
+      "delete": {
+        "tags": ["Vendor Categories"],
+        "summary": "Delete category",
+        "description": "Permanently delete a category. Fails if inventory or menu items still reference it.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["category_id"],
+                "properties": {
+                  "category_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Category deleted" },
+          "404": { "description": "Category not found" },
+          "409": { "description": "Category in use — reassign items first" }
+        }
+      }
+    },
+    "/v1/vendor/categories/single": {
+      "get": {
+        "tags": ["Vendor Categories"],
+        "summary": "Get single category",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "query", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Category retrieved" },
+          "404": { "description": "Category not found" }
+        }
+      }
+    },
+    "/v1/vendor/categories/image": {
+      "post": {
+        "tags": ["Vendor Categories"],
+        "summary": "Upload category image",
+        "description": "Upload or replace a category's image. Max 2MB. PNG/JPEG/WebP.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["category_id", "image"],
+                "properties": {
+                  "category_id": { "type": "integer" },
+                  "image": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Image uploaded" },
+          "400": { "description": "Missing file or invalid format" },
+          "404": { "description": "Category not found" }
+        }
+      }
+    },
+    "/v1/vendor/inventory": {
+      "post": {
+        "tags": ["Vendor Inventory"],
+        "summary": "Add inventory item",
+        "description": "Add a new stock-keeping item. Supports JSON body or multipart/form-data (when uploading an image).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Tomato Paste" },
+                  "sku": { "type": "string", "example": "TOM-001" },
+                  "description": { "type": "string" },
+                  "category_id": { "type": "integer" },
+                  "unit": { "type": "string", "default": "pcs", "example": "cartons" },
+                  "quantity": { "type": "number", "default": 0, "example": 50 },
+                  "low_stock_level": { "type": "number", "default": 0, "example": 10 },
+                  "cost_price": { "type": "number", "example": 1500 },
+                  "selling_price": { "type": "number", "example": 2000 },
+                  "is_perishable": { "type": "boolean", "default": false },
+                  "expiry_date": { "type": "string", "format": "date", "example": "2026-06-30" },
+                  "supplier": { "type": "string", "example": "ABC Supplies" },
+                  "notes": { "type": "string" }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Tomato Paste" },
+                  "sku": { "type": "string", "example": "TOM-001" },
+                  "description": { "type": "string" },
+                  "category_id": { "type": "integer" },
+                  "unit": { "type": "string", "default": "pcs", "example": "cartons" },
+                  "quantity": { "type": "number", "default": 0, "example": 50 },
+                  "low_stock_level": { "type": "number", "default": 0, "example": 10 },
+                  "cost_price": { "type": "number", "example": 1500 },
+                  "selling_price": { "type": "number", "example": 2000 },
+                  "is_perishable": { "type": "boolean", "default": false },
+                  "expiry_date": { "type": "string", "format": "date", "example": "2026-06-30" },
+                  "supplier": { "type": "string", "example": "ABC Supplies" },
+                  "notes": { "type": "string" },
+                  "image": { "type": "string", "format": "binary", "description": "Item image (png/jpeg/webp, max 2 MB)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Inventory item added" },
+          "400": { "description": "Validation error" },
+          "403": { "description": "Not a vendor" },
+          "409": { "description": "Duplicate SKU" }
+        }
+      },
+      "get": {
+        "tags": ["Vendor Inventory"],
+        "summary": "List inventory items",
+        "description": "Paginated list of inventory items with filters for category, search, and low stock.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "low_stock", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Show only low-stock items" },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["name", "quantity_low", "quantity_high", "cost", "newest"], "default": "name" } }
+        ],
+        "responses": {
+          "200": { "description": "Items list with pagination" }
+        }
+      },
+      "put": {
+        "tags": ["Vendor Inventory"],
+        "summary": "Update inventory item",
+        "description": "Update item details (not quantity — use /adjust for stock changes).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["item_id"],
+                "properties": {
+                  "item_id": { "type": "integer" },
+                  "name": { "type": "string" },
+                  "sku": { "type": "string" },
+                  "description": { "type": "string" },
+                  "category_id": { "type": "integer" },
+                  "unit": { "type": "string" },
+                  "low_stock_level": { "type": "number" },
+                  "cost_price": { "type": "number" },
+                  "selling_price": { "type": "number" },
+                  "is_perishable": { "type": "boolean" },
+                  "expiry_date": { "type": "string", "format": "date" },
+                  "supplier": { "type": "string" },
+                  "notes": { "type": "string" },
+                  "is_active": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Item updated" },
+          "400": { "description": "No valid fields" },
+          "404": { "description": "Item not found" }
+        }
+      },
+      "delete": {
+        "tags": ["Vendor Inventory"],
+        "summary": "Delete inventory item",
+        "description": "Permanently remove an inventory item and its stock logs.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["item_id"],
+                "properties": {
+                  "item_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Item deleted" },
+          "404": { "description": "Item not found" }
+        }
+      }
+    },
+    "/v1/vendor/inventory/single": {
+      "get": {
+        "tags": ["Vendor Inventory"],
+        "summary": "Get single inventory item",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "query", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Item retrieved" },
+          "404": { "description": "Item not found" }
+        }
+      }
+    },
+    "/v1/vendor/inventory/adjust": {
+      "post": {
+        "tags": ["Vendor Inventory"],
+        "summary": "Adjust stock quantity",
+        "description": "Add or remove stock. Creates an audit log entry. Types: restock (adds), sale/waste (subtracts), return (adds), correction (±).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["item_id", "adjustment_type", "quantity"],
+                "properties": {
+                  "item_id": { "type": "integer" },
+                  "adjustment_type": { "type": "string", "enum": ["restock", "sale", "waste", "return", "correction"] },
+                  "quantity": { "type": "number", "example": 20, "description": "Amount to adjust (always positive for restock/sale/waste/return)" },
+                  "reference": { "type": "string", "example": "PO-2026-001", "description": "Purchase order, receipt ref, etc." },
+                  "notes": { "type": "string", "example": "Weekly restock from supplier" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Stock adjusted — returns updated item + adjustment details" },
+          "400": { "description": "Insufficient stock or validation error" },
+          "404": { "description": "Item not found" }
+        }
+      }
+    },
+    "/v1/vendor/inventory/logs": {
+      "get": {
+        "tags": ["Vendor Inventory"],
+        "summary": "Get stock adjustment logs",
+        "description": "Paginated audit trail of stock changes for a specific inventory item.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "item_id", "in": "query", "required": true, "schema": { "type": "integer" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Logs with pagination" },
+          "404": { "description": "Inventory item not found" }
+        }
+      }
+    },
+    "/v1/vendor/inventory/image": {
+      "post": {
+        "tags": ["Vendor Inventory"],
+        "summary": "Upload inventory item image",
+        "description": "Upload or replace an inventory item's image. Max 2MB. PNG/JPEG/WebP.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["item_id", "image"],
+                "properties": {
+                  "item_id": { "type": "integer" },
+                  "image": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Image uploaded" },
+          "404": { "description": "Item not found" }
+        }
+      }
+    },
+    "/v1/vendor/inventory/summary": {
+      "get": {
+        "tags": ["Vendor Inventory"],
+        "summary": "Inventory dashboard summary",
+        "description": "Overview: total items, total stock value, low-stock count, expiring-soon count, and per-category breakdown.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Summary data" },
+          "403": { "description": "Not a vendor" }
+        }
+      }
+    },
+    "/v1/vendor/menu": {
+      "post": {
+        "tags": ["Vendor Menu"],
+        "summary": "Create menu item",
+        "description": "Add a new item to the vendor's point-of-sale menu. Supports JSON body or multipart/form-data (when uploading an image). For multipart, send tags and options as JSON strings.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "price"],
+                "properties": {
+                  "name": { "type": "string", "example": "Jollof Rice with Chicken" },
+                  "price": { "type": "number", "example": 3500 },
+                  "description": { "type": "string", "example": "Smoky party-style jollof rice served with grilled chicken" },
+                  "category_id": { "type": "integer" },
+                  "discount_price": { "type": "number", "example": 2800 },
+                  "preparation_time": { "type": "string", "example": "15-20 mins" },
+                  "calories": { "type": "integer", "example": 650 },
+                  "tags": { "type": "array", "items": { "type": "string" }, "example": ["spicy", "popular", "halal"] },
+                  "options": { "type": "array", "description": "Customisable add-ons or options", "items": { "type": "object" }, "example": [{ "name": "Extra Chicken", "price": 500 }, { "name": "Plantain", "price": 300 }] },
+                  "is_featured": { "type": "boolean", "default": false },
+                  "sort_order": { "type": "integer", "default": 0 }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "price"],
+                "properties": {
+                  "name": { "type": "string", "example": "Jollof Rice with Chicken" },
+                  "price": { "type": "number", "example": 3500 },
+                  "description": { "type": "string", "example": "Smoky party-style jollof rice served with grilled chicken" },
+                  "category_id": { "type": "integer" },
+                  "discount_price": { "type": "number", "example": 2800 },
+                  "preparation_time": { "type": "string", "example": "15-20 mins" },
+                  "calories": { "type": "integer", "example": 650 },
+                  "tags": { "type": "string", "description": "JSON string array, e.g. [\"spicy\",\"popular\"]" },
+                  "options": { "type": "string", "description": "JSON string array of objects, e.g. [{\"name\":\"Extra Chicken\",\"price\":500}]" },
+                  "is_featured": { "type": "boolean", "default": false },
+                  "sort_order": { "type": "integer", "default": 0 },
+                  "image": { "type": "string", "format": "binary", "description": "Menu item image (png/jpeg/webp, max 3 MB)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Menu item created" },
+          "400": { "description": "Validation error" },
+          "403": { "description": "Not a vendor" }
+        }
+      },
+      "get": {
+        "tags": ["Vendor Menu"],
+        "summary": "List own menu items",
+        "description": "Vendor views their own menu items. Supports filters and sorting.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "available", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] } },
+          { "name": "featured", "in": "query", "schema": { "type": "string", "enum": ["true"] } },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["sort_order", "name", "price_low", "price_high", "newest", "popular", "rating"], "default": "sort_order" } }
+        ],
+        "responses": {
+          "200": { "description": "Menu items with pagination" }
+        }
+      },
+      "put": {
+        "tags": ["Vendor Menu"],
+        "summary": "Update menu item",
+        "description": "Update a menu item's details, pricing, tags, options, etc.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["item_id"],
+                "properties": {
+                  "item_id": { "type": "integer" },
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "price": { "type": "number" },
+                  "discount_price": { "type": "number" },
+                  "category_id": { "type": "integer" },
+                  "preparation_time": { "type": "string" },
+                  "calories": { "type": "integer" },
+                  "tags": { "type": "array", "items": { "type": "string" } },
+                  "options": { "type": "array", "items": { "type": "object" } },
+                  "is_available": { "type": "boolean" },
+                  "is_featured": { "type": "boolean" },
+                  "is_active": { "type": "boolean" },
+                  "sort_order": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Item updated" },
+          "400": { "description": "No valid fields" },
+          "404": { "description": "Item not found" }
+        }
+      },
+      "delete": {
+        "tags": ["Vendor Menu"],
+        "summary": "Delete menu item",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["item_id"],
+                "properties": {
+                  "item_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Item deleted" },
+          "404": { "description": "Item not found" }
+        }
+      }
+    },
+    "/v1/vendor/menu/single": {
+      "get": {
+        "tags": ["Vendor Menu"],
+        "summary": "Get single menu item",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "query", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Item retrieved" },
+          "404": { "description": "Item not found" }
+        }
+      }
+    },
+    "/v1/vendor/menu/toggle": {
+      "post": {
+        "tags": ["Vendor Menu"],
+        "summary": "Toggle item availability",
+        "description": "Quick toggle a menu item between available and unavailable.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["item_id"],
+                "properties": {
+                  "item_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Availability toggled" },
+          "404": { "description": "Item not found" }
+        }
+      }
+    },
+    "/v1/vendor/menu/image": {
+      "post": {
+        "tags": ["Vendor Menu"],
+        "summary": "Upload menu item image",
+        "description": "Upload or replace a menu item's image. Max 3MB. PNG/JPEG/WebP.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["item_id", "image"],
+                "properties": {
+                  "item_id": { "type": "integer" },
+                  "image": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Image uploaded" },
+          "404": { "description": "Item not found" }
+        }
+      }
+    },
+    "/v1/vendors/menu": {
+      "get": {
+        "tags": ["Vendors - Public"],
+        "summary": "Browse vendor menu",
+        "description": "Public endpoint for customers to browse a vendor's available menu items by vendor slug or ID. Returns categories and paginated items.",
+        "parameters": [
+          { "name": "vendor", "in": "query", "schema": { "type": "string" }, "description": "Vendor slug (e.g. mamas-kitchen)" },
+          { "name": "vendor_id", "in": "query", "schema": { "type": "integer" }, "description": "Or use vendor ID" },
+          { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Vendor info, menu categories, and paginated menu items" },
+          "400": { "description": "Missing vendor parameter" },
+          "404": { "description": "Vendor not found" }
+        }
+      }
+    },
+
+    "/v1/admin/pos/payment-methods": {
+      "post": {
+        "tags": ["POS Admin"],
+        "summary": "Create payment method",
+        "description": "Admin creates a new POS payment method (e.g. Cash, Card, Transfer, Online).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Mobile Money" },
+                  "description": { "type": "string" },
+                  "icon": { "type": "string" },
+                  "requires_gateway": { "type": "boolean", "default": false },
+                  "sort_order": { "type": "integer", "default": 0 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Payment method created" },
+          "400": { "description": "Validation error or duplicate name" },
+          "403": { "description": "Admin only" }
+        }
+      },
+      "get": {
+        "tags": ["POS Admin"],
+        "summary": "List all payment methods",
+        "description": "Admin lists all POS payment methods (active and inactive).",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Array of payment methods" },
+          "403": { "description": "Admin only" }
+        }
+      },
+      "put": {
+        "tags": ["POS Admin"],
+        "summary": "Update payment method",
+        "description": "Admin updates an existing POS payment method.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "integer" },
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "icon": { "type": "string" },
+                  "requires_gateway": { "type": "boolean" },
+                  "is_active": { "type": "boolean" },
+                  "sort_order": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Payment method updated" },
+          "404": { "description": "Payment method not found" }
+        }
+      },
+      "delete": {
+        "tags": ["POS Admin"],
+        "summary": "Delete payment method",
+        "description": "Admin deletes a POS payment method. Fails if any orders reference it.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Payment method deleted" },
+          "404": { "description": "Not found" },
+          "409": { "description": "In use by orders" }
+        }
+      }
+    },
+
+    "/v1/vendor/pos/payment-methods": {
+      "get": {
+        "tags": ["POS Vendor"],
+        "summary": "Get available payment methods",
+        "description": "Returns all active payment methods with the vendor's enabled/disabled state and gateway configuration status.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Array of payment methods with vendor_enabled flag" },
+          "403": { "description": "Vendor only" }
+        }
+      }
+    },
+    "/v1/vendor/pos/payment-methods/toggle": {
+      "post": {
+        "tags": ["POS Vendor"],
+        "summary": "Toggle vendor payment method",
+        "description": "Enable or disable a payment method for this vendor's POS. Online method requires a configured payment gateway.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["payment_method_id"],
+                "properties": {
+                  "payment_method_id": { "type": "integer", "example": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Payment method toggled with new state" },
+          "400": { "description": "Gateway not configured (for online)" },
+          "404": { "description": "Payment method not found" }
+        }
+      }
+    },
+
+    "/v1/vendor/pos/orders": {
+      "post": {
+        "tags": ["POS Orders"],
+        "summary": "Create POS order",
+        "description": "Create a new order with items. Items can reference menu_item_id or be ad-hoc (item_name + item_price). Supports dine_in, takeaway, and delivery order types.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["items"],
+                "properties": {
+                  "order_type": { "type": "string", "enum": ["dine_in", "takeaway", "delivery"], "default": "dine_in" },
+                  "table_number": { "type": "string", "example": "T5" },
+                  "customer_name": { "type": "string" },
+                  "customer_phone": { "type": "string" },
+                  "customer_note": { "type": "string" },
+                  "notes": { "type": "string" },
+                  "discount_amount": { "type": "number" },
+                  "discount_reason": { "type": "string" },
+                  "tax_amount": { "type": "number" },
+                  "status": { "type": "string", "enum": ["draft", "pending"], "default": "draft" },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "menu_item_id": { "type": "integer", "description": "Reference to vendor_menu_items.id" },
+                        "item_name": { "type": "string", "description": "Required if no menu_item_id" },
+                        "item_price": { "type": "number", "description": "Required if no menu_item_id; optional override if menu_item_id given" },
+                        "quantity": { "type": "integer", "default": 1 },
+                        "options": { "type": "object" },
+                        "special_instructions": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Order created with items" },
+          "400": { "description": "Validation error or menu item not found" },
+          "403": { "description": "Vendor only" }
+        }
+      },
+      "get": {
+        "tags": ["POS Orders"],
+        "summary": "List orders",
+        "description": "List vendor's POS orders with filtering by status, payment_status, archived state, date range, and search by order number / customer name / phone.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["draft", "pending", "preparing", "ready", "completed", "cancelled"] } },
+          { "name": "payment_status", "in": "query", "schema": { "type": "string", "enum": ["unpaid", "partial", "paid", "refunded"] } },
+          { "name": "archived", "in": "query", "schema": { "type": "string", "enum": ["true", "false", "all"] }, "description": "Default false (hides archived)" },
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Search order number, customer name or phone" },
+          { "name": "date_from", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "date_to", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["newest", "oldest", "total_high", "total_low"] }, "description": "Default newest" },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated orders with item_count and total_quantity" }
+        }
+      }
+    },
+    "/v1/vendor/pos/orders/single": {
+      "get": {
+        "tags": ["POS Orders"],
+        "summary": "Get single order",
+        "description": "Get full order details including all line items, payment method, and timestamps.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "query", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Full order with items array" },
+          "404": { "description": "Order not found" }
+        }
+      }
+    },
+    "/v1/vendor/pos/orders/items": {
+      "post": {
+        "tags": ["POS Orders"],
+        "summary": "Add items to order",
+        "description": "Add new line items to an existing order (draft, pending, or preparing). Recalculates totals automatically.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["order_id", "items"],
+                "properties": {
+                  "order_id": { "type": "integer" },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "menu_item_id": { "type": "integer" },
+                        "item_name": { "type": "string" },
+                        "item_price": { "type": "number" },
+                        "quantity": { "type": "integer", "default": 1 },
+                        "options": { "type": "object" },
+                        "special_instructions": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated order with new items" },
+          "400": { "description": "Validation error" },
+          "404": { "description": "Order not found or not editable" }
+        }
+      },
+      "delete": {
+        "tags": ["POS Orders"],
+        "summary": "Remove item from order",
+        "description": "Remove a single line item from an editable order. Recalculates totals and adjusts discount if necessary.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["order_id", "order_item_id"],
+                "properties": {
+                  "order_id": { "type": "integer" },
+                  "order_item_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated order without the removed item" },
+          "404": { "description": "Order or item not found" }
+        }
+      }
+    },
+    "/v1/vendor/pos/orders/status": {
+      "put": {
+        "tags": ["POS Orders"],
+        "summary": "Update order status",
+        "description": "Transition order through the workflow: draft → pending → preparing → ready → completed. Cancelled orders cannot be modified. Completed orders get a completed_at timestamp.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["order_id", "status"],
+                "properties": {
+                  "order_id": { "type": "integer" },
+                  "status": { "type": "string", "enum": ["pending", "preparing", "ready", "completed", "cancelled"] },
+                  "cancel_reason": { "type": "string", "description": "Required when status=cancelled" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Order with updated status" },
+          "400": { "description": "Invalid transition" },
+          "404": { "description": "Order not found" }
+        }
+      }
+    },
+    "/v1/vendor/pos/orders/payment": {
+      "post": {
+        "tags": ["POS Orders"],
+        "summary": "Process order payment",
+        "description": "Record payment for an order. For cash: pass amount_paid to calculate change. For card/transfer: amount_paid defaults to total. Auto-moves draft orders to pending when fully paid.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["order_id", "payment_method_id"],
+                "properties": {
+                  "order_id": { "type": "integer" },
+                  "payment_method_id": { "type": "integer", "description": "Must be enabled for this vendor" },
+                  "amount_paid": { "type": "number", "description": "Defaults to total_amount. For cash, pass actual amount received." },
+                  "gateway_reference": { "type": "string", "description": "Transaction ref for online/card payments" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Payment recorded with payment_status (paid/partial) and change_due" },
+          "400": { "description": "Already paid, cancelled, or payment method not enabled" }
+        }
+      }
+    },
+    "/v1/vendor/pos/orders/discount": {
+      "post": {
+        "tags": ["POS Orders"],
+        "summary": "Apply discount to order",
+        "description": "Apply a flat amount or percentage discount to an order in draft or pending status. Capped at subtotal.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["order_id"],
+                "properties": {
+                  "order_id": { "type": "integer" },
+                  "discount_type": { "type": "string", "enum": ["flat", "percent"], "default": "flat" },
+                  "discount_value": { "type": "number", "description": "Amount in currency or percentage (0-100)" },
+                  "discount_reason": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Order with discount applied and recalculated total" },
+          "404": { "description": "Order not found or not editable" }
+        }
+      }
+    },
+    "/v1/vendor/pos/orders/archive": {
+      "post": {
+        "tags": ["POS Orders"],
+        "summary": "Toggle order archive",
+        "description": "Archive or unarchive an order. Archived orders are hidden from the default list view but still accessible with ?archived=true or ?archived=all.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["order_id"],
+                "properties": {
+                  "order_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Order archived/unarchived with new state" },
+          "404": { "description": "Order not found" }
+        }
+      }
+    },
+    "/v1/vendor/pos/summary": {
+      "get": {
+        "tags": ["POS Orders"],
+        "summary": "Daily sales summary",
+        "description": "Get a comprehensive daily summary: total/completed/cancelled/active orders, revenue, discounts, collected vs unpaid, payment method breakdown, top selling items, and order type breakdown.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "date", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Defaults to today (YYYY-MM-DD)" }
+        ],
+        "responses": {
+          "200": { "description": "Daily summary with breakdowns" }
+        }
+      }
     }
   },
   "tags": [
@@ -1818,6 +3616,46 @@
     {
       "name": "Payment Admin",
       "description": "Payment gateway administration and analytics endpoints"
+    },
+    {
+      "name": "Admin - Accounts",
+      "description": "Admin account management — create users, update roles, reset passwords, toggle status"
+    },
+    {
+      "name": "Vendor Store",
+      "description": "Food vendor store management — set up store, update details, opening hours, delivery settings (requires vendor role)"
+    },
+    {
+      "name": "Vendor Payment Config",
+      "description": "Vendor payment gateway configuration — set up, retrieve, and test payment gateway credentials (requires vendor role)"
+    },
+    {
+      "name": "Vendor Categories",
+      "description": "Unified category management for both inventory and menu — create, list, update, delete categories (requires vendor role)"
+    },
+    {
+      "name": "Vendor Inventory",
+      "description": "Stock keeping — manage ingredients, supplies, raw materials. Track quantities, costs, low-stock alerts, and adjustment history (requires vendor role)"
+    },
+    {
+      "name": "Vendor Menu",
+      "description": "Point-of-sale menu management — create menu items, set prices, manage availability, upload images (requires vendor role)"
+    },
+    {
+      "name": "Vendors - Public",
+      "description": "Public food vendor discovery — browse stores, search menus, view vendor profiles"
+    },
+    {
+      "name": "POS Admin",
+      "description": "Admin management of POS payment methods — create, update, delete payment method types available to vendors"
+    },
+    {
+      "name": "POS Vendor",
+      "description": "Vendor POS payment method management — view available methods, enable/disable for your store"
+    },
+    {
+      "name": "POS Orders",
+      "description": "Point-of-sale order workflow — create orders, manage items, apply discounts, process payments, track status, archive orders, daily sales summary"
     }
   ]
 }
