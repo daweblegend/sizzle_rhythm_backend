@@ -75,7 +75,7 @@ function getVendorByUserId($userId) {
 // HELPER: Format vendor response
 // ========================
 function formatVendorResponse($vendor) {
-    $jsonFields = ['cuisine_type', 'tags', 'opening_hours'];
+    $jsonFields = ['cuisine_type', 'tags', 'opening_hours', 'currency'];
     foreach ($jsonFields as $field) {
         if (isset($vendor[$field]) && is_string($vendor[$field])) {
             $vendor[$field] = json_decode($vendor[$field], true);
@@ -141,10 +141,12 @@ function createVendorProfile() {
     $cuisineTypeRaw = $body['cuisine_type'] ?? null;
     $tagsRaw        = $body['tags'] ?? null;
     $openingHrsRaw  = $body['opening_hours'] ?? null;
+    $currencyRaw    = $body['currency'] ?? null;
 
     $cuisineType = $cuisineTypeRaw ? json_encode(is_array($cuisineTypeRaw) ? $cuisineTypeRaw : json_decode($cuisineTypeRaw, true)) : null;
     $tags        = $tagsRaw ? json_encode(is_array($tagsRaw) ? $tagsRaw : json_decode($tagsRaw, true)) : null;
     $openingHrs  = $openingHrsRaw ? json_encode(is_array($openingHrsRaw) ? $openingHrsRaw : json_decode($openingHrsRaw, true)) : null;
+    $currency    = $currencyRaw ? json_encode(is_array($currencyRaw) ? $currencyRaw : json_decode($currencyRaw, true)) : json_encode(['code' => 'NGN', 'symbol' => '₦']);
 
     // Numeric fields
     $minimumOrder = isset($body['minimum_order']) && is_numeric($body['minimum_order']) ? (float)$body['minimum_order'] : 0;
@@ -157,17 +159,17 @@ function createVendorProfile() {
 
     $query = "INSERT INTO vendors (
         uuid, user_id, business_name, slug, description,
-        contact_email, contact_phone, address, city, state, country,
+        contact_email, contact_phone, address, city, state, country, currency,
         cuisine_type, tags, preparation_time, minimum_order,
         opening_hours, delivery_available, pickup_available,
         delivery_fee, delivery_radius_km, estimated_delivery_time,
         created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
 
     $stmt = mysqli_prepare($conn, $query);
-    mysqli_stmt_bind_param($stmt, "sissssssssssssdsiidds",
+    mysqli_stmt_bind_param($stmt, "sisssssssssssssdsiidds",
         $uuid, $userId, $businessName, $slug, $description,
-        $contactEmail, $contactPhone, $address, $city, $state, $country,
+        $contactEmail, $contactPhone, $address, $city, $state, $country, $currency,
         $cuisineType, $tags, $prepTime, $minimumOrder,
         $openingHrs, $deliveryAvailable, $pickupAvailable,
         $deliveryFee, $deliveryRadius, $estDelivery
@@ -307,7 +309,7 @@ function updateVendorProfile() {
     }
 
     // JSON fields
-    $jsonFields = ['cuisine_type', 'tags', 'opening_hours'];
+    $jsonFields = ['cuisine_type', 'tags', 'opening_hours', 'currency'];
     foreach ($jsonFields as $field) {
         if (isset($body[$field])) {
             $fields[] = "$field = ?";

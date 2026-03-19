@@ -8,7 +8,7 @@ require_once APP_ROOT . '/vendor/autoload.php';
 use Ramsey\Uuid\Uuid;
 
 // ========================
-// HELPER: Verify vendor & return vendor_id
+// HELPER: Verify vendor or team member & return vendor_id
 // ========================
 function verifyPOSVendor() {
     global $conn;
@@ -27,16 +27,41 @@ function verifyPOSVendor() {
         ResponseHandler::error('User not found or account is inactive.', null, 404);
         return null;
     }
-    if ($row['role'] !== 'vendor') {
-        ResponseHandler::error('Access denied. Vendor privileges required.', null, 403);
-        return null;
-    }
-    if (!$row['vendor_id']) {
-        ResponseHandler::error('Vendor store profile not found. Please create your store profile first.', null, 404);
-        return null;
+
+    // Vendor owner — direct access
+    if ($row['role'] === 'vendor') {
+        if (!$row['vendor_id']) {
+            ResponseHandler::error('Vendor store profile not found. Please create your store profile first.', null, 404);
+            return null;
+        }
+        return ['vendor_id' => (int)$row['vendor_id'], 'user_id' => (int)$row['user_id'], 'is_owner' => true, 'team_role' => 'owner', 'permissions' => null];
     }
 
-    return ['vendor_id' => (int)$row['vendor_id'], 'user_id' => (int)$row['user_id']];
+    // Team member — resolve vendor from vendor_team_members
+    if ($row['role'] === 'team_member') {
+        $stmt = mysqli_prepare($conn, "SELECT vendor_id, team_role, permissions FROM vendor_team_members WHERE user_id = ? AND status = 'active'");
+        mysqli_stmt_bind_param($stmt, "i", $userId);
+        mysqli_stmt_execute($stmt);
+        $team = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+
+        if (!$team) {
+            ResponseHandler::error('You are not an active member of any vendor team.', null, 403);
+            return null;
+        }
+
+        $perms = $team['permissions'] ? json_decode($team['permissions'], true) : [];
+
+        return [
+            'vendor_id'   => (int)$team['vendor_id'],
+            'user_id'     => (int)$row['user_id'],
+            'is_owner'    => false,
+            'team_role'   => $team['team_role'],
+            'permissions' => $perms
+        ];
+    }
+
+    ResponseHandler::error('Access denied. Vendor or team member privileges required.', null, 403);
+    return null;
 }
 
 

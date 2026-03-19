@@ -40,7 +40,7 @@ function getUserProfile() {
 
         if ($vendor) {
             // Decode JSON fields
-            foreach (['cuisine_type', 'tags', 'opening_hours'] as $field) {
+            foreach (['cuisine_type', 'tags', 'opening_hours', 'currency'] as $field) {
                 if (isset($vendor[$field]) && is_string($vendor[$field])) {
                     $vendor[$field] = json_decode($vendor[$field], true);
                 }
@@ -60,6 +60,75 @@ function getUserProfile() {
 
             $user['vendor_profile'] = $vendor;
         } else {
+            $user['vendor_profile'] = null;
+        }
+    }
+
+    // If user is a team_member, append their team info and the vendor's store profile
+    if ($user['role'] === 'team_member') {
+        $tmQuery = "
+            SELECT tm.id AS team_member_id, tm.uuid AS team_member_uuid, tm.team_role, tm.permissions,
+                   tm.status AS team_status, tm.invited_at, tm.joined_at,
+                   v.*, v.id AS vendor_id
+            FROM vendor_team_members tm
+            JOIN vendors v ON v.id = tm.vendor_id
+            WHERE tm.user_id = ? AND tm.status IN ('invited', 'active')
+            LIMIT 1
+        ";
+        $tmStmt = mysqli_prepare($conn, $tmQuery);
+        mysqli_stmt_bind_param($tmStmt, "i", $userId);
+        mysqli_stmt_execute($tmStmt);
+        $tmRow = mysqli_fetch_assoc(mysqli_stmt_get_result($tmStmt));
+
+        if ($tmRow) {
+            // Extract team-specific fields
+            $user['team_info'] = [
+                'team_member_id'   => (int)$tmRow['team_member_id'],
+                'team_member_uuid' => $tmRow['team_member_uuid'],
+                'team_role'        => $tmRow['team_role'],
+                'permissions'      => json_decode($tmRow['permissions'], true) ?? [],
+                'team_status'      => $tmRow['team_status'],
+                'invited_at'       => $tmRow['invited_at'],
+                'joined_at'        => $tmRow['joined_at'],
+            ];
+
+            // Build vendor store profile from the same row
+            $vendorFields = [
+                'vendor_id', 'uuid', 'user_id', 'business_name', 'slug', 'description', 'logo', 'banner_image',
+                'contact_email', 'contact_phone', 'address', 'city', 'state', 'country', 'currency', 'latitude', 'longitude',
+                'cuisine_type', 'tags', 'preparation_time', 'minimum_order', 'is_open', 'opening_hours',
+                'delivery_available', 'pickup_available', 'delivery_fee', 'delivery_radius_km',
+                'estimated_delivery_time', 'total_orders', 'total_reviews', 'average_rating',
+                'is_verified', 'verified_at', 'is_active', 'created_at', 'updated_at'
+            ];
+            $vendor = [];
+            foreach ($vendorFields as $f) {
+                $key = ($f === 'vendor_id') ? 'id' : $f;
+                $vendor[$key] = $tmRow[$f] ?? null;
+            }
+
+            // Decode JSON fields
+            foreach (['cuisine_type', 'tags', 'opening_hours', 'currency'] as $field) {
+                if (isset($vendor[$field]) && is_string($vendor[$field])) {
+                    $vendor[$field] = json_decode($vendor[$field], true);
+                }
+            }
+            // Cast numeric / boolean fields
+            $vendor['minimum_order']      = (float)($vendor['minimum_order'] ?? 0);
+            $vendor['delivery_fee']       = (float)($vendor['delivery_fee'] ?? 0);
+            $vendor['delivery_radius_km'] = $vendor['delivery_radius_km'] !== null ? (float)$vendor['delivery_radius_km'] : null;
+            $vendor['average_rating']     = (float)($vendor['average_rating'] ?? 0);
+            $vendor['total_orders']       = (int)($vendor['total_orders'] ?? 0);
+            $vendor['total_reviews']      = (int)($vendor['total_reviews'] ?? 0);
+            $vendor['is_open']            = (bool)($vendor['is_open'] ?? false);
+            $vendor['delivery_available'] = (bool)($vendor['delivery_available'] ?? false);
+            $vendor['pickup_available']   = (bool)($vendor['pickup_available'] ?? false);
+            $vendor['is_verified']        = (bool)($vendor['is_verified'] ?? false);
+            $vendor['is_active']          = (bool)($vendor['is_active'] ?? false);
+
+            $user['vendor_profile'] = $vendor;
+        } else {
+            $user['team_info']      = null;
             $user['vendor_profile'] = null;
         }
     }

@@ -831,4 +831,170 @@ return [
         'path' => '/src/controllers/POSOrderController.php',
         'action' => 'getDailySummary'
     ],
+
+    //*****************************************************
+    // ************** VENDOR TEAM ROUTES ******************
+    // ****************************************************
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/team',
+        'handler' => 'addTeamMember',
+        'path' => '/src/controllers/TeamController.php',
+        'action' => 'addTeamMember'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/team',
+        'handler' => 'listTeamMembers',
+        'path' => '/src/controllers/TeamController.php',
+        'action' => 'listTeamMembers'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/team/permissions',
+        'handler' => 'getAvailablePermissions',
+        'path' => '/src/controllers/TeamController.php',
+        'action' => 'getAvailablePermissions'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/team/single',
+        'handler' => 'getTeamMember',
+        'path' => '/src/controllers/TeamController.php',
+        'action' => 'getTeamMember'
+    ],
+    [
+        'method' => 'PUT',
+        'url' => '/v1/vendor/team',
+        'handler' => 'updateTeamMember',
+        'path' => '/src/controllers/TeamController.php',
+        'action' => 'updateTeamMember'
+    ],
+    [
+        'method' => 'DELETE',
+        'url' => '/v1/vendor/team',
+        'handler' => 'removeTeamMember',
+        'path' => '/src/controllers/TeamController.php',
+        'action' => 'removeTeamMember'
+    ],
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/team/status',
+        'handler' => 'updateTeamMemberStatus',
+        'path' => '/src/controllers/TeamController.php',
+        'action' => 'updateTeamMemberStatus'
+    ],
+
+    //*****************************************************
+    // ************ VENDOR CUSTOMER ROUTES ****************
+    // ****************************************************
+    [
+        'method' => 'POST',
+        'url' => '/v1/vendor/customers',
+        'handler' => 'addCustomer',
+        'path' => '/src/controllers/CustomerController.php',
+        'action' => 'addCustomer'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/customers',
+        'handler' => 'listCustomers',
+        'path' => '/src/controllers/CustomerController.php',
+        'action' => 'listCustomers'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/customers/stats',
+        'handler' => 'getCustomerStats',
+        'path' => '/src/controllers/CustomerController.php',
+        'action' => 'getCustomerStats'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/customers/single',
+        'handler' => 'getCustomer',
+        'path' => '/src/controllers/CustomerController.php',
+        'action' => 'getCustomer'
+    ],
+    [
+        'method' => 'PUT',
+        'url' => '/v1/vendor/customers',
+        'handler' => 'updateCustomer',
+        'path' => '/src/controllers/CustomerController.php',
+        'action' => 'updateCustomer'
+    ],
+    [
+        'method' => 'DELETE',
+        'url' => '/v1/vendor/customers',
+        'handler' => 'removeCustomer',
+        'path' => '/src/controllers/CustomerController.php',
+        'action' => 'removeCustomer'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/customers/orders',
+        'handler' => 'getCustomerOrderHistory',
+        'path' => '/src/controllers/CustomerController.php',
+        'action' => 'getCustomerOrderHistory'
+    ],
+
+    //*****************************************************
+    // ************ VENDOR DASHBOARD ROUTES ****************
+    // ****************************************************
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/dashboard',
+        'handler' => 'getDashboardFull',
+        'path' => '/src/controllers/DashboardController.php',
+        'action' => 'getDashboardFull'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/dashboard/overview',
+        'handler' => 'getDashboardOverview',
+        'path' => '/src/controllers/DashboardController.php',
+        'action' => 'getDashboardOverview'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/dashboard/sales',
+        'handler' => 'getDashboardSalesGraph',
+        'path' => '/src/controllers/DashboardController.php',
+        'action' => 'getDashboardSalesGraph'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/dashboard/order-volume',
+        'handler' => 'getDashboardOrderVolume',
+        'path' => '/src/controllers/DashboardController.php',
+        'action' => 'getDashboardOrderVolume'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/dashboard/recent-orders',
+        'handler' => 'getDashboardRecentOrders',
+        'path' => '/src/controllers/DashboardController.php',
+        'action' => 'getDashboardRecentOrders'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/dashboard/low-stock',
+        'handler' => 'getDashboardLowStock',
+        'path' => '/src/controllers/DashboardController.php',
+        'action' => 'getDashboardLowStock'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/dashboard/top-items',
+        'handler' => 'getDashboardTopItems',
+        'path' => '/src/controllers/DashboardController.php',
+        'action' => 'getDashboardTopItems'
+    ],
+    [
+        'method' => 'GET',
+        'url' => '/v1/vendor/dashboard/payment-breakdown',
+        'handler' => 'getDashboardPaymentBreakdown',
+        'path' => '/src/controllers/DashboardController.php',
+        'action' => 'getDashboardPaymentBreakdown'
+    ],
 ];

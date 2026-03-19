@@ -3594,6 +3594,424 @@
           "200": { "description": "Daily summary with breakdowns" }
         }
       }
+    },
+
+    "/v1/vendor/team": {
+      "post": {
+        "tags": ["Vendor Team"],
+        "summary": "Add team member",
+        "description": "Create a new team member for your vendor store. Creates a user account (role=team_member) and links them to your vendor. If the email already belongs to an existing user, they are linked directly.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["first_name", "last_name", "email"],
+                "properties": {
+                  "first_name": { "type": "string", "example": "Jane" },
+                  "last_name": { "type": "string", "example": "Doe" },
+                  "email": { "type": "string", "format": "email", "example": "jane.doe@example.com" },
+                  "phone": { "type": "string", "example": "08011112222" },
+                  "team_role": { "type": "string", "enum": ["manager", "cashier", "attendant", "kitchen", "inventory_clerk"], "default": "attendant" },
+                  "permissions": { "type": "array", "items": { "type": "string" }, "description": "Custom permissions array. If omitted, defaults for the team_role are used." },
+                  "password": { "type": "string", "description": "Optional custom password. If omitted, a temporary password is generated." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Team member added successfully with user account created" },
+          "400": { "description": "Validation error (missing fields, invalid role, user already on a team)" },
+          "409": { "description": "Email already belongs to a non-team-member user" }
+        }
+      },
+      "get": {
+        "tags": ["Vendor Team"],
+        "summary": "List team members",
+        "description": "Get all team members for your vendor store. Optionally filter by status.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["invited", "active", "suspended", "removed"] }, "description": "Filter by status" }
+        ],
+        "responses": {
+          "200": { "description": "List of team members with user details" }
+        }
+      },
+      "put": {
+        "tags": ["Vendor Team"],
+        "summary": "Update team member",
+        "description": "Update a team member's role and/or permissions.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "integer", "description": "Team member ID (from vendor_team_members)" },
+                  "team_role": { "type": "string", "enum": ["manager", "cashier", "attendant", "kitchen", "inventory_clerk"] },
+                  "permissions": { "type": "array", "items": { "type": "string" }, "description": "Updated permissions array" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Team member updated" },
+          "404": { "description": "Team member not found" }
+        }
+      },
+      "delete": {
+        "tags": ["Vendor Team"],
+        "summary": "Remove team member",
+        "description": "Permanently remove a team member. Sets their status to 'removed' and deactivates their user account.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "integer", "description": "Team member ID" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Team member removed" },
+          "404": { "description": "Team member not found" }
+        }
+      }
+    },
+    "/v1/vendor/team/permissions": {
+      "get": {
+        "tags": ["Vendor Team"],
+        "summary": "Get available permissions",
+        "description": "Returns all available team roles, permission slugs, and the default permission sets for each role. Useful for building role assignment UIs.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Available roles, permissions, and role_defaults map" }
+        }
+      }
+    },
+    "/v1/vendor/team/single": {
+      "get": {
+        "tags": ["Vendor Team"],
+        "summary": "Get single team member",
+        "description": "Retrieve full details of a single team member by ID.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "query", "required": true, "schema": { "type": "integer" }, "description": "Team member ID" }
+        ],
+        "responses": {
+          "200": { "description": "Team member details with user info" },
+          "404": { "description": "Team member not found" }
+        }
+      }
+    },
+    "/v1/vendor/team/status": {
+      "post": {
+        "tags": ["Vendor Team"],
+        "summary": "Update team member status",
+        "description": "Change a team member's status (active, suspended, invited, removed). Activating sets joined_at and enables the user account; suspending/removing disables it.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id", "status"],
+                "properties": {
+                  "id": { "type": "integer", "description": "Team member ID" },
+                  "status": { "type": "string", "enum": ["invited", "active", "suspended", "removed"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Status updated" },
+          "404": { "description": "Team member not found" }
+        }
+      }
+    },
+
+    "/v1/vendor/customers": {
+      "post": {
+        "tags": ["Vendor Customers"],
+        "summary": "Add customer",
+        "description": "Add a customer to your vendor directory. Creates a new user account (role=customer) if no matching email/phone found, or links an existing user. Adds vendor-specific metadata (tags, notes).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["first_name"],
+                "properties": {
+                  "first_name": { "type": "string", "example": "John" },
+                  "last_name": { "type": "string", "example": "Smith" },
+                  "email": { "type": "string", "format": "email", "example": "john@example.com" },
+                  "phone": { "type": "string", "example": "09012345678" },
+                  "tags": { "type": "array", "items": { "type": "string" }, "example": ["regular", "vip"] },
+                  "notes": { "type": "string", "example": "Prefers spicy food" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Customer added successfully" },
+          "400": { "description": "Validation error" },
+          "409": { "description": "Customer already in your directory" }
+        }
+      },
+      "get": {
+        "tags": ["Vendor Customers"],
+        "summary": "List customers",
+        "description": "Get paginated list of your vendor's customers. Supports search (name/email/phone), tag filter, and sorting.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Search by name, email, or phone" },
+          { "name": "tag", "in": "query", "schema": { "type": "string" }, "description": "Filter by tag (uses JSON_CONTAINS)" },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["name", "top_spender", "most_orders", "last_order", "newest"] }, "description": "Sort order (default: newest)" },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated customer list" }
+        }
+      },
+      "put": {
+        "tags": ["Vendor Customers"],
+        "summary": "Update customer",
+        "description": "Update vendor-specific customer metadata (tags, notes).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "integer", "description": "Customer ID (from vendor_customers)" },
+                  "tags": { "type": "array", "items": { "type": "string" }, "example": ["regular", "vip", "loyalty"] },
+                  "notes": { "type": "string", "example": "Updated notes" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Customer updated" },
+          "404": { "description": "Customer not found" }
+        }
+      },
+      "delete": {
+        "tags": ["Vendor Customers"],
+        "summary": "Remove customer",
+        "description": "Soft-delete a customer from your vendor directory. Sets is_active=0 on vendor_customers. The user account is NOT deleted.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "integer", "description": "Customer ID" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Customer removed from directory" },
+          "404": { "description": "Customer not found" }
+        }
+      }
+    },
+    "/v1/vendor/customers/stats": {
+      "get": {
+        "tags": ["Vendor Customers"],
+        "summary": "Customer statistics",
+        "description": "Get aggregated customer stats: totals, active/inactive counts, revenue, average spend, highest spender, average orders, and top 5 customers by spend.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Customer statistics with top customers" }
+        }
+      }
+    },
+    "/v1/vendor/customers/single": {
+      "get": {
+        "tags": ["Vendor Customers"],
+        "summary": "Get single customer",
+        "description": "Retrieve full customer details including user profile and their 10 most recent POS orders.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "query", "required": true, "schema": { "type": "integer" }, "description": "Customer ID" }
+        ],
+        "responses": {
+          "200": { "description": "Customer details with recent orders" },
+          "404": { "description": "Customer not found" }
+        }
+      }
+    },
+    "/v1/vendor/customers/orders": {
+      "get": {
+        "tags": ["Vendor Customers"],
+        "summary": "Customer order history",
+        "description": "Get full paginated order history for a specific customer, matched by their phone number against POS orders.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "query", "required": true, "schema": { "type": "integer" }, "description": "Customer ID" },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated order history" }
+        }
+      }
+    },
+    "/v1/vendor/dashboard": {
+      "get": {
+        "tags": ["Vendor Dashboard"],
+        "summary": "Full dashboard data",
+        "description": "Single endpoint that returns all dashboard data: status cards (with % change vs previous period), sales graph, order volume graph, recent orders (all statuses, latest 10), top selling items, payment method breakdown, and order type breakdown. Graph mode adapts to the period: today/yesterday → daily (last 7 days), 7days → daily with day-name labels, this_month → weekly buckets, this_year → monthly buckets, date_range → auto (daily/weekly/monthly based on duration).",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "period", "in": "query", "schema": { "type": "string", "enum": ["today", "yesterday", "7days", "this_month", "this_year", "date_range"], "default": "today" }, "description": "Date filter period" },
+          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Start date for date_range (YYYY-MM-DD)" },
+          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "End date for date_range (YYYY-MM-DD)" }
+        ],
+        "responses": {
+          "200": { "description": "Full dashboard data with cards, graphs, pending orders, top items, payment and order type breakdowns" }
+        }
+      }
+    },
+    "/v1/vendor/dashboard/overview": {
+      "get": {
+        "tags": ["Vendor Dashboard"],
+        "summary": "Dashboard status cards",
+        "description": "Returns status cards: total_orders, pending_orders, completed_orders, cancelled_orders, revenue (each with % change vs previous equivalent period), and low_stock_alert count.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "period", "in": "query", "schema": { "type": "string", "enum": ["today", "yesterday", "7days", "this_month", "this_year", "date_range"], "default": "today" }, "description": "Date filter period" },
+          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Start date for date_range" },
+          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "End date for date_range" }
+        ],
+        "responses": {
+          "200": { "description": "Status cards with comparison percentages" }
+        }
+      }
+    },
+    "/v1/vendor/dashboard/sales": {
+      "get": {
+        "tags": ["Vendor Dashboard"],
+        "summary": "Sales graph data",
+        "description": "Returns revenue graph for the selected period. Graph mode: today/yesterday → daily (last 7 days, date labels), 7days → daily (day-name labels like Mon, Tue), this_month → weekly buckets, this_year → monthly buckets, date_range → auto. Includes total revenue, previous period revenue, and percentage change.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "period", "in": "query", "schema": { "type": "string", "enum": ["today", "yesterday", "7days", "this_month", "this_year", "date_range"], "default": "today" }, "description": "Date filter period" },
+          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Start date for date_range" },
+          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "End date for date_range" }
+        ],
+        "responses": {
+          "200": { "description": "Daily sales graph data with comparison" }
+        }
+      }
+    },
+    "/v1/vendor/dashboard/order-volume": {
+      "get": {
+        "tags": ["Vendor Dashboard"],
+        "summary": "Order volume graph data",
+        "description": "Returns order count graph (excluding cancelled) for the selected period. Graph mode: today/yesterday → daily (last 7 days, date labels), 7days → daily (day-name labels), this_month → weekly buckets, this_year → monthly buckets, date_range → auto.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "period", "in": "query", "schema": { "type": "string", "enum": ["today", "yesterday", "7days", "this_month", "this_year", "date_range"], "default": "today" }, "description": "Date filter period" },
+          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Start date for date_range" },
+          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "End date for date_range" }
+        ],
+        "responses": {
+          "200": { "description": "Daily order volume graph data with comparison" }
+        }
+      }
+    },
+    "/v1/vendor/dashboard/recent-orders": {
+      "get": {
+        "tags": ["Vendor Dashboard"],
+        "summary": "Recent orders (all statuses)",
+        "description": "Paginated list of recent orders across all statuses (draft, pending, preparing, ready, completed, cancelled), not archived. Optionally filter by a single status using ?status= query param. Each order includes its items list, customer info, totals, payment status, and timestamps.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["draft", "pending", "preparing", "ready", "completed", "cancelled"] }, "description": "Optional: filter by order status" },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated recent orders with items" }
+        }
+      }
+    },
+    "/v1/vendor/dashboard/low-stock": {
+      "get": {
+        "tags": ["Vendor Dashboard"],
+        "summary": "Low stock inventory items",
+        "description": "Paginated list of inventory items where current quantity is at or below the low_stock_level threshold. Sorted by severity (lowest stock ratio first).",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated low stock items" }
+        }
+      }
+    },
+    "/v1/vendor/dashboard/top-items": {
+      "get": {
+        "tags": ["Vendor Dashboard"],
+        "summary": "Top selling items",
+        "description": "Returns the top selling menu items for the selected period, ranked by total quantity sold. Includes total sales amount and number of distinct orders.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "period", "in": "query", "schema": { "type": "string", "enum": ["today", "yesterday", "7days", "this_month", "this_year", "date_range"], "default": "today" }, "description": "Date filter period" },
+          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Start date for date_range" },
+          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "End date for date_range" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 }, "description": "Max items to return (1-50)" }
+        ],
+        "responses": {
+          "200": { "description": "Top selling items list" }
+        }
+      }
+    },
+    "/v1/vendor/dashboard/payment-breakdown": {
+      "get": {
+        "tags": ["Vendor Dashboard"],
+        "summary": "Payment method breakdown",
+        "description": "Returns revenue breakdown by payment method (Cash, Card, Transfer, Online) for the selected period. Each method includes order count, total amount, and percentage of total revenue.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "period", "in": "query", "schema": { "type": "string", "enum": ["today", "yesterday", "7days", "this_month", "this_year", "date_range"], "default": "today" }, "description": "Date filter period" },
+          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Start date for date_range" },
+          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "End date for date_range" }
+        ],
+        "responses": {
+          "200": { "description": "Payment method breakdown with percentages" }
+        }
+      }
     }
   },
   "tags": [
@@ -3656,6 +4074,18 @@
     {
       "name": "POS Orders",
       "description": "Point-of-sale order workflow — create orders, manage items, apply discounts, process payments, track status, archive orders, daily sales summary"
+    },
+    {
+      "name": "Vendor Team",
+      "description": "Vendor team management — add team members, assign roles and granular permissions, activate/suspend/remove members (requires vendor role)"
+    },
+    {
+      "name": "Vendor Customers",
+      "description": "Vendor customer directory — add customers, track spend/orders, tag and search customers, view order history, customer statistics (requires vendor role)"
+    },
+    {
+      "name": "Vendor Dashboard",
+      "description": "Vendor dashboard analytics — status cards, sales graph, order volume graph, pending orders, low stock alerts, top selling items, payment breakdown. All endpoints support date filtering (today, yesterday, 7days, this_month, date_range)"
     }
   ]
 }
