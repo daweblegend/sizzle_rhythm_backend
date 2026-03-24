@@ -804,6 +804,74 @@ function listVendors() {
 // ===========================================
 
 /**
+ * Get Available Gateways
+ * Lists all active payment gateways with their configuration_fields so the vendor
+ * knows exactly what credentials to provide. Also shows the vendor's current
+ * configuration status for each gateway.
+ */
+function getAvailableGateways() {
+    global $conn;
+
+    $userId = verifyVendor();
+    if (!$userId) return;
+
+    // Fetch all active gateways
+    $stmt = mysqli_prepare($conn, "
+        SELECT id, name, slug, display_name, description, logo_url,
+               is_default, supported_currencies, supported_countries, configuration_fields
+        FROM payment_gateways
+        WHERE is_active = 1
+        ORDER BY is_default DESC, name ASC
+    ");
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+
+    $gateways = [];
+
+    while ($gw = mysqli_fetch_assoc($result)) {
+        $gwId = (int)$gw['id'];
+
+        // Decode JSON fields
+        $gw['supported_currencies'] = $gw['supported_currencies'] ? json_decode($gw['supported_currencies'], true) : [];
+        $gw['supported_countries']  = $gw['supported_countries'] ? json_decode($gw['supported_countries'], true) : [];
+        $gw['configuration_fields'] = $gw['configuration_fields'] ? json_decode($gw['configuration_fields'], true) : [];
+        $gw['is_default'] = (bool)$gw['is_default'];
+
+        // Check if this vendor already has a config for this gateway (both environments)
+        $cfgStmt = mysqli_prepare($conn, "
+            SELECT id, environment, is_active, created_at, updated_at
+            FROM payment_gateway_configs
+            WHERE gateway_id = ? AND user_id = ?
+            ORDER BY environment ASC
+        ");
+        mysqli_stmt_bind_param($cfgStmt, "ii", $gwId, $userId);
+        mysqli_stmt_execute($cfgStmt);
+        $cfgResult = mysqli_stmt_get_result($cfgStmt);
+
+        $configs = [];
+        while ($cfg = mysqli_fetch_assoc($cfgResult)) {
+            $configs[] = [
+                'environment' => $cfg['environment'],
+                'is_active'   => (bool)$cfg['is_active'],
+                'created_at'  => $cfg['created_at'],
+                'updated_at'  => $cfg['updated_at'],
+            ];
+        }
+
+        $gw['vendor_status'] = [
+            'is_configured' => !empty($configs),
+            'configurations' => $configs,
+        ];
+
+        unset($gw['id']); // Don't expose internal ID
+
+        $gateways[] = $gw;
+    }
+
+    ResponseHandler::success('Available payment gateways retrieved.', ['gateways' => $gateways]);
+}
+
+/**
  * Configure Payment Gateway
  * Saves payment gateway credentials and settings for the vendor
  */
@@ -1011,6 +1079,9 @@ switch ($action) {
         break;
     case 'listVendors':
         listVendors();
+        break;
+    case 'getAvailableGateways':
+        getAvailableGateways();
         break;
     case 'configureVendorGateway':
         configureVendorGateway();

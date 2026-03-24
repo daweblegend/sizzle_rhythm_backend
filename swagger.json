@@ -2410,6 +2410,72 @@
         }
       }
     },
+    "/v1/vendor/payment/gateways": {
+      "get": {
+        "tags": ["Vendor Payment Config"],
+        "summary": "Get available payment gateways",
+        "description": "Lists all active payment gateways with their configuration_fields, supported currencies/countries, and the vendor's current configuration status for each. Use this to guide vendors on what credentials to provide before calling the configure endpoint.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Available gateways with configuration fields and vendor setup status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "gateways": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string", "example": "Paystack" },
+                          "slug": { "type": "string", "example": "paystack" },
+                          "display_name": { "type": "string", "example": "Paystack Payment Gateway" },
+                          "description": { "type": "string" },
+                          "logo_url": { "type": "string", "nullable": true },
+                          "is_default": { "type": "boolean" },
+                          "supported_currencies": { "type": "array", "items": { "type": "string" }, "example": ["NGN", "USD", "GHS"] },
+                          "supported_countries": { "type": "array", "items": { "type": "string" }, "example": ["NG", "ZA", "GH"] },
+                          "configuration_fields": {
+                            "type": "object",
+                            "description": "Each key is a credential field name. The value describes its type (text/password), label, and whether it's required.",
+                            "example": {
+                              "public_key": { "type": "text", "label": "Public Key", "required": true },
+                              "secret_key": { "type": "password", "label": "Secret Key", "required": true },
+                              "webhook_secret": { "type": "password", "label": "Webhook Secret", "required": false }
+                            }
+                          },
+                          "vendor_status": {
+                            "type": "object",
+                            "properties": {
+                              "is_configured": { "type": "boolean", "description": "Whether the vendor has configured this gateway" },
+                              "configurations": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "environment": { "type": "string", "enum": ["sandbox", "live"] },
+                                    "is_active": { "type": "boolean" },
+                                    "created_at": { "type": "string" },
+                                    "updated_at": { "type": "string" }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": { "description": "Not a vendor role" }
+        }
+      }
+    },
     "/v1/vendor/payment/gateway/configure": {
       "post": {
         "tags": ["Vendor Payment Config"],
@@ -2778,18 +2844,27 @@
       "get": {
         "tags": ["Vendor Inventory"],
         "summary": "List inventory items",
-        "description": "Paginated list of inventory items with filters for category, search, and low stock.",
+        "description": "Paginated list of inventory items with extensive filters and contextual analytics summary. Analytics always reflect the same filters applied to the list.",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
           { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
           { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
-          { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
-          { "name": "search", "in": "query", "schema": { "type": "string" } },
-          { "name": "low_stock", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Show only low-stock items" },
-          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["name", "quantity_low", "quantity_high", "cost", "newest"], "default": "name" } }
+          { "name": "category_id", "in": "query", "schema": { "type": "integer" }, "description": "Filter by category ID" },
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Search by name, SKU, description, or supplier" },
+          { "name": "low_stock", "in": "query", "schema": { "type": "string", "enum": ["true"] }, "description": "Show only low-stock items (qty > 0 but ≤ low_stock_level)" },
+          { "name": "out_of_stock", "in": "query", "schema": { "type": "string", "enum": ["true"] }, "description": "Show only out-of-stock items (qty ≤ 0)" },
+          { "name": "is_perishable", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Filter by perishable status" },
+          { "name": "expiring_soon", "in": "query", "schema": { "type": "string", "enum": ["true"] }, "description": "Perishable items expiring within 7 days" },
+          { "name": "supplier", "in": "query", "schema": { "type": "string" }, "description": "Filter by supplier name (partial match)" },
+          { "name": "has_image", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Filter items with or without images" },
+          { "name": "unit", "in": "query", "schema": { "type": "string" }, "description": "Filter by unit (e.g., pcs, kg, cartons)" },
+          { "name": "is_active", "in": "query", "schema": { "type": "string", "enum": ["true", "false", "all"], "default": "true" }, "description": "Filter by active status. Default shows active only. Use 'all' for everything." },
+          { "name": "date_from", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Filter items created from this date (YYYY-MM-DD)" },
+          { "name": "date_to", "in": "query", "schema": { "type": "string", "format": "date" }, "description": "Filter items created up to this date (YYYY-MM-DD)" },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["name", "quantity_low", "quantity_high", "cost_high", "cost_low", "value_high", "value_low", "selling_price", "expiry_date", "newest", "oldest", "updated"], "default": "name" }, "description": "Sort order for results" }
         ],
         "responses": {
-          "200": { "description": "Items list with pagination" }
+          "200": { "description": "Items list with analytics, category breakdown, and pagination" }
         }
       },
       "put": {
@@ -3321,7 +3396,7 @@
       "post": {
         "tags": ["POS Orders"],
         "summary": "Create POS order",
-        "description": "Create a new order with items. Items can reference menu_item_id or be ad-hoc (item_name + item_price). Supports dine_in, takeaway, and delivery order types.",
+        "description": "Create a new order with items. Items can reference menu_item_id or be ad-hoc (item_name + item_price). Optionally include payment at creation — payment_method_id must be enabled in the vendor's payment config. If fully paid and status is draft, the order auto-promotes to pending. Payment can also be processed later via the /payment endpoint.",
         "security": [{ "bearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -3341,6 +3416,9 @@
                   "discount_reason": { "type": "string" },
                   "tax_amount": { "type": "number" },
                   "status": { "type": "string", "enum": ["draft", "pending"], "default": "draft" },
+                  "payment_method_id": { "type": "integer", "description": "ID of a payment method enabled for this vendor. Optional — omit to leave order unpaid." },
+                  "amount_paid": { "type": "number", "description": "Amount the customer is paying. Defaults to total_amount if payment_method_id is provided but amount_paid is omitted." },
+                  "gateway_reference": { "type": "string", "description": "External gateway reference for online payments." },
                   "items": {
                     "type": "array",
                     "items": {
@@ -3361,15 +3439,15 @@
           }
         },
         "responses": {
-          "201": { "description": "Order created with items" },
-          "400": { "description": "Validation error or menu item not found" },
+          "201": { "description": "Order created with items and optional payment" },
+          "400": { "description": "Validation error, menu item not found, or payment method not enabled" },
           "403": { "description": "Vendor only" }
         }
       },
       "get": {
         "tags": ["POS Orders"],
         "summary": "List orders",
-        "description": "List vendor's POS orders with filtering by status, payment_status, archived state, date range, and search by order number / customer name / phone.",
+        "description": "List vendor's POS orders with filtering by status, payment_status, archived state, date range, and search by order number / customer name / phone. Includes an analytics summary that reflects the same filters: total orders, status breakdown, payment breakdown, revenue, collected revenue, unpaid amount, total discounts, and average order value.",
         "security": [{ "bearerAuth": [] }],
         "parameters": [
           { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["draft", "pending", "preparing", "ready", "completed", "cancelled"] } },
@@ -3383,7 +3461,7 @@
           { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
         ],
         "responses": {
-          "200": { "description": "Paginated orders with item_count and total_quantity" }
+          "200": { "description": "Analytics summary + paginated orders with item_count and total_quantity" }
         }
       }
     },

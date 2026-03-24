@@ -368,16 +368,52 @@ function createOrder() {
     // Status — default is 'draft', but allow 'pending' directly
     $status = in_array($body['status'] ?? '', ['draft', 'pending']) ? $body['status'] : 'draft';
 
+    // ---- Optional payment at creation ----
+    $paymentMethodId = isset($body['payment_method_id']) ? (int)$body['payment_method_id'] : null;
+    $amountPaid      = isset($body['amount_paid']) ? (float)$body['amount_paid'] : 0;
+    $gatewayRef      = isset($body['gateway_reference']) ? UtilHandler::sanitizeInput($conn, $body['gateway_reference']) : null;
+    $paymentStatus   = 'unpaid';
+    $changeDue       = 0;
+
+    if ($paymentMethodId) {
+        // Validate payment method is enabled for this vendor
+        $pmStmt = mysqli_prepare($conn, "
+            SELECT pm.* FROM pos_payment_methods pm
+            JOIN vendor_payment_methods vpm ON vpm.payment_method_id = pm.id
+            WHERE pm.id = ? AND vpm.vendor_id = ? AND vpm.is_enabled = 1 AND pm.is_active = 1
+        ");
+        mysqli_stmt_bind_param($pmStmt, "ii", $paymentMethodId, $vendorId);
+        mysqli_stmt_execute($pmStmt);
+        $pm = mysqli_fetch_assoc(mysqli_stmt_get_result($pmStmt));
+
+        if (!$pm) {
+            ResponseHandler::error('Payment method not found or not enabled for your store.', null, 400);
+            return;
+        }
+
+        // Default amount_paid to total if not specified
+        if ($amountPaid <= 0) $amountPaid = $totalAmount;
+
+        $changeDue     = max(0, round($amountPaid - $totalAmount, 2));
+        $paymentStatus = $amountPaid >= $totalAmount ? 'paid' : 'partial';
+
+        // If fully paid and status is draft, auto-move to pending
+        if ($paymentStatus === 'paid' && $status === 'draft') {
+            $status = 'pending';
+        }
+    }
+
     // Insert order
     $stmt = mysqli_prepare($conn, "
-        INSERT INTO pos_orders (uuid, vendor_id, order_number, created_by, customer_name, customer_phone, customer_note, order_type, table_number, subtotal, discount_amount, discount_reason, tax_amount, total_amount, status, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO pos_orders (uuid, vendor_id, order_number, created_by, customer_name, customer_phone, customer_note, order_type, table_number, subtotal, discount_amount, discount_reason, tax_amount, total_amount, payment_method_id, payment_status, amount_paid, change_due, gateway_reference, status, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
-    mysqli_stmt_bind_param($stmt, "sisisisssddsddss",
+    mysqli_stmt_bind_param($stmt, "sisisisssddsddisddsss",
         $uuid, $vendorId, $orderNumber, $userId,
         $customerName, $customerPhone, $customerNote,
         $orderType, $tableNumber,
         $subtotal, $discountAmount, $discountReason, $taxAmount, $totalAmount,
+        $paymentMethodId, $paymentStatus, $amountPaid, $changeDue, $gatewayRef,
         $status, $notes
     );
 
@@ -852,39 +888,32 @@ function listOrders() {
     $dateTo   = $_GET['date_to'] ?? null;
     $sort     = $_GET['sort'] ?? 'newest';
 
-    $query  = "SELECT o.*, pm.name AS payment_method_name FROM pos_orders o LEFT JOIN pos_payment_methods pm ON o.payment_method_id = pm.id WHERE o.vendor_id = ?";
-    $countQ = "SELECT COUNT(*) AS total FROM pos_orders o WHERE o.vendor_id = ?";
+    // ---- Build shared WHERE clause (used by list, count, AND analytics) ----
+    $where  = "o.vendor_id = ?";
     $params = [$vendorId];
     $types  = "i";
 
     if ($status && in_array($status, ['draft', 'pending', 'preparing', 'ready', 'completed', 'cancelled'])) {
-        $query  .= " AND o.status = ?";
-        $countQ .= " AND o.status = ?";
+        $where   .= " AND o.status = ?";
         $params[] = $status;
         $types   .= "s";
     }
 
     if ($payment && in_array($payment, ['unpaid', 'partial', 'paid', 'refunded'])) {
-        $query  .= " AND o.payment_status = ?";
-        $countQ .= " AND o.payment_status = ?";
+        $where   .= " AND o.payment_status = ?";
         $params[] = $payment;
         $types   .= "s";
     }
 
     if ($archived === 'true') {
-        $query  .= " AND o.archived = 1";
-        $countQ .= " AND o.archived = 1";
+        $where .= " AND o.archived = 1";
     } elseif ($archived === 'false' || $archived === null) {
-        // By default, hide archived orders
-        $query  .= " AND o.archived = 0";
-        $countQ .= " AND o.archived = 0";
+        $where .= " AND o.archived = 0";
     }
-    // archived=all shows everything
 
     if ($search) {
         $searchTerm = '%' . UtilHandler::sanitizeInput($conn, $search) . '%';
-        $query  .= " AND (o.order_number LIKE ? OR o.customer_name LIKE ? OR o.customer_phone LIKE ?)";
-        $countQ .= " AND (o.order_number LIKE ? OR o.customer_name LIKE ? OR o.customer_phone LIKE ?)";
+        $where   .= " AND (o.order_number LIKE ? OR o.customer_name LIKE ? OR o.customer_phone LIKE ?)";
         $params[] = $searchTerm;
         $params[] = $searchTerm;
         $params[] = $searchTerm;
@@ -892,34 +921,60 @@ function listOrders() {
     }
 
     if ($dateFrom) {
-        $query  .= " AND DATE(o.created_at) >= ?";
-        $countQ .= " AND DATE(o.created_at) >= ?";
+        $where   .= " AND DATE(o.created_at) >= ?";
         $params[] = $dateFrom;
         $types   .= "s";
     }
     if ($dateTo) {
-        $query  .= " AND DATE(o.created_at) <= ?";
-        $countQ .= " AND DATE(o.created_at) <= ?";
+        $where   .= " AND DATE(o.created_at) <= ?";
         $params[] = $dateTo;
         $types   .= "s";
     }
 
-    switch ($sort) {
-        case 'oldest':   $query .= " ORDER BY o.created_at ASC"; break;
-        case 'total_high': $query .= " ORDER BY o.total_amount DESC"; break;
-        case 'total_low':  $query .= " ORDER BY o.total_amount ASC"; break;
-        default:          $query .= " ORDER BY o.created_at DESC"; break;
-    }
-
-    $query .= " LIMIT ? OFFSET ?";
-
-    // Count
-    $cStmt = mysqli_prepare($conn, $countQ);
+    // ---- Count ----
+    $countQ = "SELECT COUNT(*) AS total FROM pos_orders o WHERE {$where}";
+    $cStmt  = mysqli_prepare($conn, $countQ);
     mysqli_stmt_bind_param($cStmt, $types, ...$params);
     mysqli_stmt_execute($cStmt);
     $total = (int)mysqli_fetch_assoc(mysqli_stmt_get_result($cStmt))['total'];
 
-    // Fetch
+    // ---- Analytics (same filters, aggregated) ----
+    $analyticsQ = "
+        SELECT
+            COUNT(*) AS total_orders,
+            SUM(CASE WHEN o.status = 'draft' THEN 1 ELSE 0 END) AS draft_orders,
+            SUM(CASE WHEN o.status IN ('pending','preparing','ready') THEN 1 ELSE 0 END) AS pending_orders,
+            SUM(CASE WHEN o.status = 'completed' THEN 1 ELSE 0 END) AS completed_orders,
+            SUM(CASE WHEN o.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_orders,
+            COALESCE(SUM(o.total_amount), 0) AS gross_total,
+            COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total_amount ELSE 0 END), 0) AS revenue,
+            COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.discount_amount ELSE 0 END), 0) AS total_discounts,
+            COALESCE(SUM(CASE WHEN o.payment_status = 'paid' AND o.status = 'completed' THEN o.total_amount ELSE 0 END), 0) AS collected_revenue,
+            COALESCE(SUM(CASE WHEN o.payment_status = 'unpaid' AND o.status NOT IN ('cancelled') THEN o.total_amount ELSE 0 END), 0) AS unpaid_amount,
+            SUM(CASE WHEN o.payment_status = 'unpaid' THEN 1 ELSE 0 END) AS unpaid_orders,
+            SUM(CASE WHEN o.payment_status = 'partial' THEN 1 ELSE 0 END) AS partial_orders,
+            SUM(CASE WHEN o.payment_status = 'paid' THEN 1 ELSE 0 END) AS paid_orders,
+            COALESCE(AVG(CASE WHEN o.status = 'completed' THEN o.total_amount END), 0) AS avg_order_value
+        FROM pos_orders o
+        WHERE {$where}
+    ";
+    $aStmt = mysqli_prepare($conn, $analyticsQ);
+    mysqli_stmt_bind_param($aStmt, $types, ...$params);
+    mysqli_stmt_execute($aStmt);
+    $analytics = mysqli_fetch_assoc(mysqli_stmt_get_result($aStmt));
+
+    // ---- Fetch orders ----
+    $query = "SELECT o.*, pm.name AS payment_method_name FROM pos_orders o LEFT JOIN pos_payment_methods pm ON o.payment_method_id = pm.id WHERE {$where}";
+
+    switch ($sort) {
+        case 'oldest':     $query .= " ORDER BY o.created_at ASC"; break;
+        case 'total_high': $query .= " ORDER BY o.total_amount DESC"; break;
+        case 'total_low':  $query .= " ORDER BY o.total_amount ASC"; break;
+        default:           $query .= " ORDER BY o.created_at DESC"; break;
+    }
+
+    $query .= " LIMIT ? OFFSET ?";
+
     $dataParams = array_merge($params, [$limit, $offset]);
     $dataTypes  = $types . "ii";
     $stmt = mysqli_prepare($conn, $query);
@@ -930,7 +985,6 @@ function listOrders() {
     $orders = [];
     while ($row = mysqli_fetch_assoc($result)) {
         $row = formatOrder($row);
-        // Item count (lightweight — don't fetch full items for list)
         $iStmt = mysqli_prepare($conn, "SELECT COUNT(*) AS cnt, SUM(quantity) AS qty FROM pos_order_items WHERE order_id = ?");
         mysqli_stmt_bind_param($iStmt, "i", $row['id']);
         mysqli_stmt_execute($iStmt);
@@ -941,6 +995,26 @@ function listOrders() {
     }
 
     ResponseHandler::success('Orders retrieved.', [
+        'analytics' => [
+            'total_orders'    => (int)$analytics['total_orders'],
+            'status_breakdown' => [
+                'draft'     => (int)$analytics['draft_orders'],
+                'pending'   => (int)$analytics['pending_orders'],
+                'completed' => (int)$analytics['completed_orders'],
+                'cancelled' => (int)$analytics['cancelled_orders'],
+            ],
+            'payment_breakdown' => [
+                'unpaid'  => (int)$analytics['unpaid_orders'],
+                'partial' => (int)$analytics['partial_orders'],
+                'paid'    => (int)$analytics['paid_orders'],
+            ],
+            'revenue'           => (float)$analytics['revenue'],
+            'gross_total'       => (float)$analytics['gross_total'],
+            'collected_revenue' => (float)$analytics['collected_revenue'],
+            'unpaid_amount'     => (float)$analytics['unpaid_amount'],
+            'total_discounts'   => (float)$analytics['total_discounts'],
+            'avg_order_value'   => round((float)$analytics['avg_order_value'], 2),
+        ],
         'orders'     => $orders,
         'pagination' => [
             'page'        => $page,

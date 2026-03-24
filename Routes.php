@@ -494,6 +494,13 @@ return [
 
     // -- Vendor Payment Gateway Config --
     [
+        'method' => 'GET',
+        'url' => '/v1/vendor/payment/gateways',
+        'handler' => 'getAvailableGateways',
+        'path' => '/src/controllers/VendorController.php',
+        'action' => 'getAvailableGateways'
+    ],
+    [
         'method' => 'POST',
         'url' => '/v1/vendor/payment/gateway/configure',
         'handler' => 'configureVendorGateway',

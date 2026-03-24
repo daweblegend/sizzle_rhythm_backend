@@ -159,64 +159,187 @@ function listInventoryItems() {
     $vendorId = verifyInventoryVendor();
     if (!$vendorId) return;
 
-    $page       = max(1, (int)($_GET['page'] ?? 1));
-    $limit      = min(50, max(1, (int)($_GET['limit'] ?? 20)));
-    $offset     = ($page - 1) * $limit;
-    $categoryId = $_GET['category_id'] ?? null;
-    $search     = $_GET['search'] ?? null;
-    $lowStock   = $_GET['low_stock'] ?? null;
-    $sort       = $_GET['sort'] ?? 'name';
+    $page         = max(1, (int)($_GET['page'] ?? 1));
+    $limit        = min(50, max(1, (int)($_GET['limit'] ?? 20)));
+    $offset       = ($page - 1) * $limit;
+    $categoryId   = $_GET['category_id'] ?? null;
+    $search       = $_GET['search'] ?? null;
+    $lowStock     = $_GET['low_stock'] ?? null;
+    $outOfStock   = $_GET['out_of_stock'] ?? null;
+    $isPerishable = $_GET['is_perishable'] ?? null;
+    $expiringSoon = $_GET['expiring_soon'] ?? null;
+    $supplier     = $_GET['supplier'] ?? null;
+    $hasImage     = $_GET['has_image'] ?? null;
+    $unit         = $_GET['unit'] ?? null;
+    $isActive     = $_GET['is_active'] ?? null;
+    $dateFrom     = $_GET['date_from'] ?? null;
+    $dateTo       = $_GET['date_to'] ?? null;
+    $sort         = $_GET['sort'] ?? 'name';
 
-    $query  = "SELECT i.*, c.name AS category_name FROM vendor_inventory i LEFT JOIN vendor_categories c ON i.category_id = c.id WHERE i.vendor_id = ? AND i.is_active = 1";
-    $countQ = "SELECT COUNT(*) AS total FROM vendor_inventory i WHERE i.vendor_id = ? AND i.is_active = 1";
+    // ---- Build shared WHERE clause (used by list, count, AND analytics) ----
+    $where  = "i.vendor_id = ?";
     $params = [$vendorId];
     $types  = "i";
 
+    // Active filter — default to active-only unless explicitly set
+    if ($isActive === 'false') {
+        $where .= " AND i.is_active = 0";
+    } elseif ($isActive === 'all') {
+        // no filter — show everything
+    } else {
+        $where .= " AND i.is_active = 1";
+    }
+
     if ($categoryId) {
-        $query  .= " AND i.category_id = ?";
-        $countQ .= " AND i.category_id = ?";
+        $where   .= " AND i.category_id = ?";
         $params[] = (int)$categoryId;
         $types   .= "i";
     }
 
     if ($search) {
         $searchTerm = '%' . UtilHandler::sanitizeInput($conn, $search) . '%';
-        $query  .= " AND (i.name LIKE ? OR i.sku LIKE ? OR i.description LIKE ?)";
-        $countQ .= " AND (i.name LIKE ? OR i.sku LIKE ? OR i.description LIKE ?)";
+        $where   .= " AND (i.name LIKE ? OR i.sku LIKE ? OR i.description LIKE ? OR i.supplier LIKE ?)";
         $params[] = $searchTerm;
         $params[] = $searchTerm;
         $params[] = $searchTerm;
-        $types   .= "sss";
+        $params[] = $searchTerm;
+        $types   .= "ssss";
     }
 
     if ($lowStock === 'true') {
-        $query  .= " AND i.quantity <= i.low_stock_level";
-        $countQ .= " AND i.quantity <= i.low_stock_level";
+        $where .= " AND i.quantity <= i.low_stock_level AND i.quantity > 0";
     }
 
-    // Sorting
+    if ($outOfStock === 'true') {
+        $where .= " AND i.quantity <= 0";
+    }
+
+    if ($isPerishable === 'true') {
+        $where .= " AND i.is_perishable = 1";
+    } elseif ($isPerishable === 'false') {
+        $where .= " AND i.is_perishable = 0";
+    }
+
+    if ($expiringSoon === 'true') {
+        $where .= " AND i.is_perishable = 1 AND i.expiry_date IS NOT NULL AND i.expiry_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY) AND i.expiry_date >= CURDATE()";
+    }
+
+    if ($supplier) {
+        $supplierTerm = '%' . UtilHandler::sanitizeInput($conn, $supplier) . '%';
+        $where   .= " AND i.supplier LIKE ?";
+        $params[] = $supplierTerm;
+        $types   .= "s";
+    }
+
+    if ($hasImage === 'true') {
+        $where .= " AND i.image IS NOT NULL AND i.image != ''";
+    } elseif ($hasImage === 'false') {
+        $where .= " AND (i.image IS NULL OR i.image = '')";
+    }
+
+    if ($unit) {
+        $where   .= " AND i.unit = ?";
+        $params[] = UtilHandler::sanitizeInput($conn, $unit);
+        $types   .= "s";
+    }
+
+    if ($dateFrom) {
+        $where   .= " AND DATE(i.created_at) >= ?";
+        $params[] = $dateFrom;
+        $types   .= "s";
+    }
+    if ($dateTo) {
+        $where   .= " AND DATE(i.created_at) <= ?";
+        $params[] = $dateTo;
+        $types   .= "s";
+    }
+
+    // ---- Count ----
+    $countQ = "SELECT COUNT(*) AS total FROM vendor_inventory i WHERE {$where}";
+    $cStmt  = mysqli_prepare($conn, $countQ);
+    mysqli_stmt_bind_param($cStmt, $types, ...$params);
+    mysqli_stmt_execute($cStmt);
+    $total = (int)mysqli_fetch_assoc(mysqli_stmt_get_result($cStmt))['total'];
+
+    // ---- Analytics (same filters, aggregated) ----
+    $analyticsQ = "
+        SELECT
+            COUNT(*) AS total_items,
+            COALESCE(SUM(i.quantity), 0) AS total_quantity,
+            COALESCE(SUM(i.quantity * i.cost_price), 0) AS total_stock_value,
+            COALESCE(SUM(CASE WHEN i.selling_price IS NOT NULL THEN i.quantity * i.selling_price ELSE 0 END), 0) AS total_selling_value,
+            COALESCE(SUM(CASE WHEN i.selling_price IS NOT NULL THEN i.quantity * (i.selling_price - i.cost_price) ELSE 0 END), 0) AS potential_profit,
+            SUM(CASE WHEN i.quantity <= i.low_stock_level AND i.quantity > 0 THEN 1 ELSE 0 END) AS low_stock_count,
+            SUM(CASE WHEN i.quantity <= 0 THEN 1 ELSE 0 END) AS out_of_stock_count,
+            SUM(CASE WHEN i.quantity > i.low_stock_level THEN 1 ELSE 0 END) AS healthy_stock_count,
+            SUM(CASE WHEN i.is_perishable = 1 THEN 1 ELSE 0 END) AS perishable_count,
+            SUM(CASE WHEN i.is_perishable = 1 AND i.expiry_date IS NOT NULL AND i.expiry_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY) AND i.expiry_date >= CURDATE() THEN 1 ELSE 0 END) AS expiring_soon_count,
+            SUM(CASE WHEN i.is_perishable = 1 AND i.expiry_date IS NOT NULL AND i.expiry_date < CURDATE() THEN 1 ELSE 0 END) AS expired_count,
+            COALESCE(AVG(i.cost_price), 0) AS avg_cost_price,
+            COALESCE(AVG(i.selling_price), 0) AS avg_selling_price,
+            COUNT(DISTINCT i.category_id) AS category_count,
+            COUNT(DISTINCT i.supplier) AS supplier_count
+        FROM vendor_inventory i
+        WHERE {$where}
+    ";
+    $aStmt = mysqli_prepare($conn, $analyticsQ);
+    mysqli_stmt_bind_param($aStmt, $types, ...$params);
+    mysqli_stmt_execute($aStmt);
+    $analytics = mysqli_fetch_assoc(mysqli_stmt_get_result($aStmt));
+
+    // ---- Category breakdown (within current filters) ----
+    $catQ = "
+        SELECT
+            COALESCE(c.name, 'Uncategorised') AS category,
+            i.category_id,
+            COUNT(*) AS item_count,
+            COALESCE(SUM(i.quantity), 0) AS total_quantity,
+            COALESCE(SUM(i.quantity * i.cost_price), 0) AS stock_value
+        FROM vendor_inventory i
+        LEFT JOIN vendor_categories c ON i.category_id = c.id
+        WHERE {$where}
+        GROUP BY i.category_id
+        ORDER BY stock_value DESC
+    ";
+    $catStmt = mysqli_prepare($conn, $catQ);
+    mysqli_stmt_bind_param($catStmt, $types, ...$params);
+    mysqli_stmt_execute($catStmt);
+    $catResult = mysqli_stmt_get_result($catStmt);
+    $catBreakdown = [];
+    while ($cRow = mysqli_fetch_assoc($catResult)) {
+        $catBreakdown[] = [
+            'category'       => $cRow['category'],
+            'category_id'    => $cRow['category_id'] !== null ? (int)$cRow['category_id'] : null,
+            'item_count'     => (int)$cRow['item_count'],
+            'total_quantity' => (float)$cRow['total_quantity'],
+            'stock_value'    => (float)$cRow['stock_value'],
+        ];
+    }
+
+    // ---- Fetch items ----
+    $query = "SELECT i.*, c.name AS category_name FROM vendor_inventory i LEFT JOIN vendor_categories c ON i.category_id = c.id WHERE {$where}";
+
     switch ($sort) {
-        case 'quantity_low':  $query .= " ORDER BY i.quantity ASC"; break;
-        case 'quantity_high': $query .= " ORDER BY i.quantity DESC"; break;
-        case 'cost':          $query .= " ORDER BY i.cost_price DESC"; break;
-        case 'newest':        $query .= " ORDER BY i.created_at DESC"; break;
-        default:              $query .= " ORDER BY i.name ASC"; break;
+        case 'quantity_low':    $query .= " ORDER BY i.quantity ASC"; break;
+        case 'quantity_high':   $query .= " ORDER BY i.quantity DESC"; break;
+        case 'cost_high':       $query .= " ORDER BY i.cost_price DESC"; break;
+        case 'cost_low':        $query .= " ORDER BY i.cost_price ASC"; break;
+        case 'value_high':      $query .= " ORDER BY (i.quantity * i.cost_price) DESC"; break;
+        case 'value_low':       $query .= " ORDER BY (i.quantity * i.cost_price) ASC"; break;
+        case 'selling_price':   $query .= " ORDER BY i.selling_price DESC"; break;
+        case 'expiry_date':     $query .= " ORDER BY i.expiry_date ASC"; break;
+        case 'newest':          $query .= " ORDER BY i.created_at DESC"; break;
+        case 'oldest':          $query .= " ORDER BY i.created_at ASC"; break;
+        case 'updated':         $query .= " ORDER BY i.updated_at DESC"; break;
+        default:                $query .= " ORDER BY i.name ASC"; break;
     }
 
-    // Count total
-    $stmt = mysqli_prepare($conn, $countQ);
-    mysqli_stmt_bind_param($stmt, $types, ...$params);
-    mysqli_stmt_execute($stmt);
-    $total = (int)mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))['total'];
-
-    // Fetch page
     $query .= " LIMIT ? OFFSET ?";
-    $params[] = $limit;
-    $params[] = $offset;
-    $types   .= "ii";
+    $dataParams = array_merge($params, [$limit, $offset]);
+    $dataTypes  = $types . "ii";
 
     $stmt = mysqli_prepare($conn, $query);
-    mysqli_stmt_bind_param($stmt, $types, ...$params);
+    mysqli_stmt_bind_param($stmt, $dataTypes, ...$dataParams);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
 
@@ -226,6 +349,26 @@ function listInventoryItems() {
     }
 
     ResponseHandler::success('Inventory items retrieved successfully.', [
+        'analytics' => [
+            'total_items'         => (int)$analytics['total_items'],
+            'total_quantity'      => (float)$analytics['total_quantity'],
+            'total_stock_value'   => round((float)$analytics['total_stock_value'], 2),
+            'total_selling_value' => round((float)$analytics['total_selling_value'], 2),
+            'potential_profit'    => round((float)$analytics['potential_profit'], 2),
+            'stock_health' => [
+                'healthy'    => (int)$analytics['healthy_stock_count'],
+                'low_stock'  => (int)$analytics['low_stock_count'],
+                'out_of_stock' => (int)$analytics['out_of_stock_count'],
+            ],
+            'perishable_count'    => (int)$analytics['perishable_count'],
+            'expiring_soon_count' => (int)$analytics['expiring_soon_count'],
+            'expired_count'       => (int)$analytics['expired_count'],
+            'avg_cost_price'      => round((float)$analytics['avg_cost_price'], 2),
+            'avg_selling_price'   => round((float)$analytics['avg_selling_price'], 2),
+            'category_count'      => (int)$analytics['category_count'],
+            'supplier_count'      => (int)$analytics['supplier_count'],
+            'category_breakdown'  => $catBreakdown,
+        ],
         'items' => $items,
         'pagination' => [
             'page'        => $page,
